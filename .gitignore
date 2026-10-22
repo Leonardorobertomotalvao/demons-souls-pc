@@ -1,0 +1,82 @@
+# =========================================================================
+# Copyright firewall: never commit game-derived material (see docs/05-legal.md)
+# Comments MUST be on their own line — a trailing comment becomes part of the
+# pattern and silently disables it.
+# =========================================================================
+
+# Decrypted ELF, analysis output, generated/transliterated C, assets, keys
+work/
+
+# PS3 executables / modules / packages / licenses / keys (anywhere)
+*.elf
+*.self
+*.sprx
+*.prx
+*.BIN
+*.bin
+*.pkg
+*.rap
+*_keys*
+keys.txt
+
+# FromSoftware / game asset formats (anywhere)
+*.flver
+*.tpf
+*.hkx
+*.dcx
+*.param
+*.paramdef
+*.esd
+
+# Ghidra headless decompiler OUTPUT is game-derived (decompiled EBOOT) — never
+# commit. The tools/ghidra/*.java + dump.sh scripts ARE tracked (not derived).
+tools/ghidra/*.txt
+tools/ghidra/*.log
+ghidra_*.txt
+
+# -------------------------------------------------------------------------
+# Build / generated
+# -------------------------------------------------------------------------
+build/
+build_*/
+/launcher/bin/
+/launcher/obj/
+/launcher-alpha02-hotfix/bin/
+/launcher-alpha02-hotfix/obj/
+# The runtime's /dev_hdd0 etc. (the game's own save data): never commit
+gamedata/
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk
+*.lib
+__pycache__/
+*.pyc
+
+# -------------------------------------------------------------------------
+# Third-party: the ps3recomp clone (tracked via its own git + patches/)
+# Leading slash anchors to repo root so patches/ps3recomp/ is NOT ignored.
+# -------------------------------------------------------------------------
+/ps3recomp/
+spu_profile.log
+spu_watchdog.log
+
+# Firmware-derived generated source (SPURS taskset policy blob) -- NEVER commit.
+# Regenerate with: python scripts/gen_taskset_policy_blob.py
+/port/gen/
+
+# Per-machine paths for the tools (see tools/des/local.env.example)
+tools/des/local.env
+
+# Debug output the backend writes into the working directory: FP_PICK /
+# VP_PICK shader dumps, frame captures, screenshots, logs
+/*.hlsl
+*.rcap
+*.bmp
+/shots/
+tools/ghidra/*.log
+tools/ghidra/ghidra_one.txt
+
+# Claude Code per-user settings
+.claude/settings.local.json

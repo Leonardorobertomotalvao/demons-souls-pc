@@ -1,0 +1,294 @@
+diff --git a/ps3recomp/libs/audio/cellAudio.c b/ps3recomp/libs/audio/cellAudio.c
+index 7197e6c..db4e859 100644
+--- a/ps3recomp/libs/audio/cellAudio.c
++++ b/ps3recomp/libs/audio/cellAudio.c
+@@ -344,7 +344,12 @@ static int audio_backend_init(void)
+         return -1;
+     }
+ 
+-    s_wasapi_client->lpVtbl->Start(s_wasapi_client);
++    hr = s_wasapi_client->lpVtbl->Start(s_wasapi_client);
++    if (ps3_env_int("AUDIO_FLOW", 0)) {
++        extern unsigned long long ps3_ms_now(void);
++        fprintf(stderr, "[audio-flow-device] t=%llu phase=start hr=0x%08lX buffer_frames=%u render=%d\n",
++                ps3_ms_now(), (unsigned long)hr, (unsigned)s_wasapi_buf_frames, s_wasapi_render != NULL);
++    }
+     return 0;
+ }
+ 
+@@ -369,7 +374,14 @@ static void audio_backend_shutdown(void)
+ 
+ static void audio_backend_submit(const float* stereo_samples, u32 num_samples)
+ {
+-    if (!s_wasapi_render) return;
++    static int stages = -1; PS3_KNOB(stages, ps3_env_int("AUDIO_STAGES", 0));
++    static unsigned calls, missing, get_fail, release_fail, accepted, nonzero, muted;
++    static float peak;
++    static double mixed_energy, accepted_energy;
++    static unsigned energy_samples;
++    const unsigned report_blocks = ps3_env_int("AUDIO_NEXUS_TRACE", 0) ? 188u : 938u;
++    if (stages) calls++;
++    if (!s_wasapi_render) { if (stages) missing++; return; }
+ 
+     UINT32 padding = 0;
+     s_wasapi_client->lpVtbl->GetCurrentPadding(s_wasapi_client, &padding);
+@@ -391,7 +403,35 @@ static void audio_backend_submit(const float* stereo_samples, u32 num_samples)
+         PS3_KNOB(mute, getenv("AUDIO_MUTE") && getenv("AUDIO_MUTE")[0] != '0' ? 1 : 0);
+         if (mute) memset(buf, 0, num_samples * 2 * sizeof(float));
+         else      memcpy(buf, stereo_samples, num_samples * 2 * sizeof(float));
+-        s_wasapi_render->lpVtbl->ReleaseBuffer(s_wasapi_render, num_samples, 0);
++        float pk = 0;
++        double block_mixed = 0, block_output = 0;
++        if (stages) for (u32 k = 0; k < num_samples * 2; k++) {
++            float a; memcpy(&a, buf + k * sizeof(float), sizeof(a));
++            const float m = stereo_samples[k];
++            if (isfinite(m)) block_mixed += (double)m * m;
++            if (isfinite(a)) block_output += (double)a * a;
++            if (a < 0) a = -a; if (isfinite(a) && a > pk) pk = a;
++        }
++        HRESULT released = s_wasapi_render->lpVtbl->ReleaseBuffer(s_wasapi_render, num_samples, 0);
++        if (stages) {
++            if (FAILED(released)) release_fail++;
++            else {
++                accepted += num_samples; nonzero += pk > 0;
++                mixed_energy += block_mixed; accepted_energy += block_output;
++                energy_samples += num_samples * 2;
++            }
++            muted += mute != 0; if (pk > peak) peak = pk;
++        }
++    } else if (stages) get_fail++;
++    if (stages && calls % report_blocks == 0) {
++        extern unsigned long long ps3_ms_now(void);
++        fprintf(stderr, "[audio-device] calls=%u missing=%u get_fail=%u release_fail=%u accepted_frames=%u nonzero_blocks=%u muted=%u peak=%g t=%llu\n",
++                calls, missing, get_fail, release_fail, accepted, nonzero, muted, peak, ps3_ms_now());
++        if (ps3_env_int("AUDIO_NEXUS_TRACE", 0))
++            fprintf(stderr, "[audio-nexus-energy] t=%llu mixed_mean_square=%.9g accepted_mean_square=%.9g samples=%u\n",
++                    ps3_ms_now(), energy_samples ? mixed_energy / energy_samples : 0,
++                    energy_samples ? accepted_energy / energy_samples : 0, energy_samples);
++        mixed_energy = accepted_energy = 0; energy_samples = 0;
+     }
+ }
+ 
+@@ -509,6 +549,36 @@ static void audio_mix_one_block(void)
+         u32 block_offset = block_idx * CELL_AUDIO_BLOCK_SAMPLES * nch;
+         float* src = port->buffer + block_offset;
+ 
++        /* AUDIO_STAGES: aggregate on the mixer thread, no PCM file I/O. */
++        { static int stages = -1; PS3_KNOB(stages, ps3_env_int("AUDIO_STAGES", 0));
++          if (stages) {
++              static unsigned seen[CELL_AUDIO_PORT_MAX], raw[CELL_AUDIO_PORT_MAX];
++              static float peak[CELL_AUDIO_PORT_MAX];
++              static double energy[CELL_AUDIO_PORT_MAX];
++              const unsigned report_blocks = ps3_env_int("AUDIO_NEXUS_TRACE", 0) ? 188u : 938u;
++              int nz = 0;
++              for (u32 k = 0; k < CELL_AUDIO_BLOCK_SAMPLES * nch; k++) {
++                  u32 bits; memcpy(&bits, src + k, 4); if (bits) nz = 1;
++                  float a = ld_be_f32(src + k); if (a < 0) a = -a;
++                  if (isfinite(a)) energy[p] += (double)a * a;
++                  if (isfinite(a) && a > peak[p]) peak[p] = a;
++              }
++              seen[p]++; raw[p] += nz;
++              if (seen[p] == report_blocks) {
++                  extern unsigned long long ps3_ms_now(void);
++                  fprintf(stderr, "[audio-stage] port=%d running=%d ch=%u raw_nonzero=%u/%u input_peak=%g level=%g read=%llu t=%llu\n",
++                          p, port->running, nch, raw[p], seen[p], peak[p], level,
++                          (unsigned long long)port->read_index, ps3_ms_now());
++                  if (ps3_env_int("AUDIO_NEXUS_TRACE", 0))
++                      fprintf(stderr, "[audio-nexus-input] t=%llu port=%d mean_square=%.9g blocks=%u channels=%u\n",
++                              ps3_ms_now(), p, energy[p] / ((double)seen[p] * CELL_AUDIO_BLOCK_SAMPLES * nch), seen[p], nch);
++                  seen[p] = raw[p] = 0; peak[p] = 0;
++                  energy[p] = 0;
++              }
++          }
++        }
++
++
+         /* AUDIO_GAPS=1: a block still cleared when it is read, with sound
+          * within 40 blocks (213 ms) before and after it, is one the game did
+          * not write in time -- heard as a gap. Totals go on the AUDIO_RATE
+@@ -615,16 +685,35 @@ static void audio_mix_one_block(void)
+ 
+ static void audio_notify_event_queues(void)
+ {
++    /* Registration/removal runs on guest threads. Snapshot under the same
++     * mutex as the writers: publishing in_use before key otherwise lets the
++     * mixer observe a partially registered slot (and is a C data race).
++     * Release before entering sys_event to avoid nesting the two locks.
++     * A removal concurrent with this snapshot may receive one final tick. */
++    AudioNotifySlot queues[CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES];
++    mutex_lock(&s_audio_mutex);
++    memcpy(queues, s_notify_queues, sizeof(queues));
++    mutex_unlock(&s_audio_mutex);
+     /* Push the audio-period event (data1 = CELL_AUDIO_EVENT_MIX = 0) to each
+      * registered notify queue, so the game's audio loop (blocked on
+      * sys_event_queue_receive) wakes once per block and writes the next one.
+      * Resolve the queue by its ipc_key (set via cellAudioSetNotifyEventQueue). */
+     for (int i = 0; i < CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES; i++) {
+-        if (!s_notify_queues[i].in_use) continue;
+-        uint32_t qid = sys_event_find_queue_by_key(s_notify_queues[i].key);
+-        if (qid)
+-            sys_event_queue_push_by_id(qid, s_notify_queues[i].key,
+-                                       0 /*CELL_AUDIO_EVENT_MIX*/, 0, 0);
++        if (!queues[i].in_use) continue;
++        uint32_t qid = sys_event_find_queue_by_key(queues[i].key);
++        int pushed = qid ? sys_event_queue_push_by_id(qid, queues[i].key,
++                                       0 /*CELL_AUDIO_EVENT_MIX*/, 0, 0) : -1;
++        static int stages = -1; PS3_KNOB(stages, ps3_env_int("AUDIO_STAGES", 0));
++        if (stages) {
++            static unsigned seen[CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES];
++            static unsigned ok[CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES], missing[CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES];
++            static unsigned failed[CELL_AUDIO_MAX_NOTIFY_EVENT_QUEUES];
++            seen[i]++; ok[i] += pushed == 0; missing[i] += !qid;
++            failed[i] += qid && pushed != 0;
++            if (seen[i] % 938 == 0)
++                fprintf(stderr, "[audio-notify] slot=%d key=0x%llX queue=%u ticks=%u delivered=%u unresolved=%u push_failed=%u\n",
++                        i, (unsigned long long)queues[i].key, qid, seen[i], ok[i], missing[i], failed[i]);
++        }
+     }
+ }
+ 
+diff --git a/ps3recomp/libs/codec/cellAtrac.c b/ps3recomp/libs/codec/cellAtrac.c
+index 2fc398e..c9cb19a 100644
+--- a/ps3recomp/libs/codec/cellAtrac.c
++++ b/ps3recomp/libs/codec/cellAtrac.c
+@@ -35,6 +35,7 @@
+ #include "../../runtime/ppu/ppu_memory.h"
+ #include "../../third_party/at3_standalone/at3_bridge.h"
+ #include <stdio.h>
++#include "ps3emu/ps3_knob.h"
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -51,6 +52,8 @@ typedef struct {
+ 
+ typedef struct {
+     u32 handle_ea;             /* 0 = free */
++    unsigned flow_frames, flow_short, flow_bad, flow_calls, flow_nonzero;
++    float flow_peak;
+     const u8* file;            /* = img */
+     u8* img;                   /* host copy of the whole file (img_size)     */
+     u32 img_size;
+@@ -148,6 +151,7 @@ static int decode_frame(AtracSlot* s, s32 k)
+         const u32 at = s->t.data_off + (u32)s->next_frame * s->t.block_align;
+         int n = 0;
+         if (at + s->t.block_align > s->recv_end) {
++            if (ps3_env_int("AUDIO_FLOW", 0)) s->flow_short++;
+             /* Not streamed in yet: the title fell behind. Silence, once
+              * logged, rather than decoding whatever the image holds. */
+             if (!s->warned_short) {
+@@ -159,10 +163,12 @@ static int decode_frame(AtracSlot* s, s32 k)
+             memset(s->pcm, 0, sizeof(s->pcm));
+         } else if (at3p_decode(s->dec, s->pcm[0], s->pcm[1], &n, s->file + at,
+                         (int)s->t.block_align) < 0 || n != AT3P_SAMPLES) {
++            if (ps3_env_int("AUDIO_FLOW", 0)) s->flow_bad++;
+             /* A bad frame decodes as silence rather than ending the track. */
+             memset(s->pcm, 0, sizeof(s->pcm));
+         }
+         s->next_frame++;
++        if (ps3_env_int("AUDIO_FLOW", 0)) s->flow_frames++;
+     }
+     s->pcm_frame = k;
+     return 0;
+@@ -261,6 +267,11 @@ s32 cellAtracCreateDecoder(u32 pHandle, u32 pucWorkMem, u32 uiPpuThreadPriority,
+     if (s->dec) return (s32)CELL_ATRAC_ERROR_DECODER_WAS_CREATED;
+     int ba = (int)s->t.block_align;
+     s->dec = at3p_open((int)s->t.channels, &ba);
++    if (ps3_env_int("AUDIO_FLOW", 0)) {
++        extern unsigned long long ps3_ms_now(void);
++        fprintf(stderr, "[audio-flow-codec] t=%llu phase=create handle=0x%08X ready=%d channels=%u recv=%u total=%u\n",
++                ps3_ms_now(), pHandle, s->dec != NULL, s->t.channels, s->recv_end, s->img_size);
++    }
+     return s->dec ? CELL_OK : (s32)CELL_ATRAC_ERROR_API_FAIL;
+ }
+ 
+@@ -285,8 +296,17 @@ s32 cellAtracDecode(u32 pHandle, u32 pfOutAddr, u32 puiSamples, u32 puiFinishfla
+                     u32 piRemainFrame)
+ {
+     AtracSlot* s = slot_of(pHandle);
+-    if (!s) return (s32)CELL_ATRAC_ERROR_UNSET_DATA;
+-    if (!s->dec) return (s32)CELL_ATRAC_ERROR_NO_DECODER;
++    if (!s || !s->dec) {
++        if (ps3_env_int("AUDIO_FLOW", 0)) {
++            static _Thread_local unsigned errors;
++            if (errors++ < 8) {
++                extern unsigned long long ps3_ms_now(void);
++                fprintf(stderr, "[audio-flow-codec] t=%llu phase=decode_rejected handle=0x%08X slot=%d ready=%d\n",
++                        ps3_ms_now(), pHandle, s != NULL, s && s->dec);
++            }
++        }
++        return s ? (s32)CELL_ATRAC_ERROR_NO_DECODER : (s32)CELL_ATRAC_ERROR_UNSET_DATA;
++    }
+     if (puiSamples) vm_write32(puiSamples, 0);
+     if (s->pos >= (looping(s) ? s->t.loop_end : s->t.end)) {
+         if (!looping(s)) {
+@@ -302,6 +322,21 @@ s32 cellAtracDecode(u32 pHandle, u32 pfOutAddr, u32 puiSamples, u32 puiFinishfla
+     if (n > limit - s->pos) n = limit - s->pos;
+     decode_frame(s, k);
+     const u32 ch = s->t.channels;
++
++    /* This call is on the title's decoder thread, outside the device callback. */
++    if (ps3_env_int("AUDIO_STAGES", 0) || ps3_env_int("AUDIO_FLOW", 0)) {
++        extern unsigned long long ps3_ms_now(void);
++        float pk = 0;
++        for (s32 j = 0; j < n; j++) for (u32 c = 0; c < ch; c++) {
++            float a = s->pcm[c][at+j]; if (a < 0) a = -a; if (a > pk) pk = a;
++        }
++        s->flow_calls++; s->flow_nonzero += pk > 0; if (pk > s->flow_peak) s->flow_peak = pk;
++        if (s->flow_calls <= 4 || s->flow_calls % 128 == 0)
++            fprintf(stderr, "[audio-decode] calls=%u nonzero=%u peak=%g handle=0x%08X out=0x%08X pos=%d samples=%d t=%llu frames=%u short=%u bad=%u recv=%u total=%u\n",
++                    s->flow_calls, s->flow_nonzero, s->flow_peak, pHandle, pfOutAddr, s->pos, n,
++                    ps3_ms_now(), s->flow_frames, s->flow_short, s->flow_bad, s->recv_end, s->img_size);
++    }
++
+     for (s32 i = 0; i < n; i++)
+         for (u32 c = 0; c < ch; c++) {
+             u32 bits;
+diff --git a/ps3recomp/runtime/ppu/ppu_hle.cpp b/ps3recomp/runtime/ppu/ppu_hle.cpp
+index 19d1496..c422759 100644
+--- a/ps3recomp/runtime/ppu/ppu_hle.cpp
++++ b/ps3recomp/runtime/ppu/ppu_hle.cpp
+@@ -38,6 +38,8 @@
+ #endif
+ #include <stdlib.h>       /* getenv, atoi (boot trace) */
+ 
++extern "C" uint32_t sys_event_find_queue_by_key(uint64_t key);
++
+ /* Single flat NID -> handler table (all modules share it; resolution is by
+  * NID which is globally unique). Sized for the firmware import surface. */
+ #define HLE_NID_CAP 4096
+@@ -894,6 +896,35 @@ extern "C" void ps3_hle_call(uint32_t nid, ppu_context* ctx)
+                     (uint32_t)ctx->gpr[3],(uint32_t)ctx->gpr[4],(uint32_t)ctx->gpr[5],
+                     (uint32_t)ctx->gpr[6],(uint32_t)ctx->gpr[7],(uint32_t)ctx->gpr[8]);
+     }
++    /* Demon's Souls USA libmixer startup: the parent can call PortStart and
++     * read state+0x500 before _cellsurMixerMain has published its notify key.
++     * The child then creates the keyed queue, but SetNotifyEventQueue(0)
++     * succeeds and leaves that child blocked forever. Do not guess a queue:
++     * recover only this verified caller/state and require the child's own
++     * queue id to resolve from its published key. Bounded, startup-only;
++     * DES_AUDIO_NOTIFY_FIX=0 restores the original path for A/B validation. */
++    if (nid == 0x377E0CD9u && ctx->gpr[3] == 0 &&
++        ctx->lr == 0x01546380u && ctx->gpr[2] == 0x019D3BACu &&
++        ctx->gpr[30] == 0x01CE3680u && ps3_env_int("DES_AUDIO_NOTIFY_FIX", 1)) {
++        const uint32_t state = (uint32_t)ctx->gpr[30];
++        const uint64_t first = vm_read64(state + 0x500);
++        unsigned waited = 0;
++        for (;;) {
++            const uint64_t key = vm_read64(state + 0x500);
++            const uint32_t qid = vm_read32(state + 0x524);
++            if (key && qid && sys_event_find_queue_by_key(key) == qid) {
++                ctx->gpr[3] = key;
++                fprintf(stderr, "[audio-notify-fix] stale key=0 published=0x%llX queue=%u waited=%ums initial=0x%llX\n",
++                        (unsigned long long)key, qid, waited, (unsigned long long)first);
++                break;
++            }
++            if (waited == 250) {
++                fprintf(stderr, "[audio-notify-fix] notify queue not ready after 250ms; original argument retained\n");
++                break;
++            }
++            Sleep(1); waited++;
++        }
++    }
+     hle_generic fn = (hle_generic)e->handler;
+     uint64_t r = fn(ctx->gpr[3], ctx->gpr[4], ctx->gpr[5], ctx->gpr[6],
+                     ctx->gpr[7], ctx->gpr[8], ctx->gpr[9], ctx->gpr[10]);
