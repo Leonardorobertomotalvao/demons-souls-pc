@@ -20,6 +20,25 @@ public static class SelfTest
             var video=RuntimeService.VideoSettings(reloaded);
             Assert(video["RSX_WINDOW_W"]==width&&video["RSX_WINDOW_H"]==height&&video["RSX_BORDERLESS"]==borderless&&video["RSX_DISPLAY_MODE"]==mode&&video["RSX_MONITOR_DEVICE"]==reloaded.MonitorDevice,"video setting to runtime environment mapping");
         }
+        string audioTestDir=Path.Combine(Path.GetTempPath(),"DemonsLauncher-audio-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(audioTestDir);
+        string audioStateTest=Path.Combine(audioTestDir,"audio-state.txt");
+        MainWindow.AudioStatePathForTest=audioStateTest;
+        try
+        {
+            MainWindow.GameRunningForTest=true;
+            File.WriteAllText(audioStateTest,"1\n");launcherWindow.ReflectAudioStateForTest();
+            Assert(launcherWindow.MuteForTest.IsChecked==true,"audio state file 1 checks the mute box while the game runs");
+            Assert(launcherWindow.AudioStateForTest.Text.Contains("DESATIVADO"),"label reflects the muted game state");
+            File.WriteAllText(audioStateTest,"0\n");launcherWindow.ReflectAudioStateForTest();
+            Assert(launcherWindow.MuteForTest.IsChecked==false,"audio state file 0 unchecks the mute box while the game runs");
+            Assert(launcherWindow.AudioStateForTest.Text.Contains("ATIVADO")&&!launcherWindow.AudioStateForTest.Text.Contains("DESATIVADO"),"label reflects the active game state");
+            File.Delete(audioStateTest);launcherWindow.ReflectAudioStateForTest();
+            Assert(launcherWindow.AudioStateForTest.Text.Contains("aguardando"),"absent audio state file shows the waiting label");
+            MainWindow.GameRunningForTest=false;
+            launcherWindow.ReflectAudioStateForTest();
+            Assert(launcherWindow.AudioStateForTest.Text.Contains("preferência aplicada"),"no game running: the label follows the saved preference");
+        }
+        finally{MainWindow.AudioStatePathForTest=null;MainWindow.GameRunningForTest=null;Directory.Delete(audioTestDir,true);}
         launcherWindow.Close();File.Delete(settingsFixture);
         var monitors=DisplayMonitorService.Enumerate();
         Assert(monitors.Count>0,"enumerate connected display monitors");

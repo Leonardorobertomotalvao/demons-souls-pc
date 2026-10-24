@@ -37,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -57,6 +58,8 @@ void* rsx_d3d12_hwnd(void);
 
 void cellPad_set_host_hold(int hold);
 extern volatile unsigned g_pad0_buttons;  // pad 0 as the game last read it (CELL_PAD_CTRL_* layout)
+
+void ps3_setenv(const char* name, const char* value);  // boot_main.cpp: through the getenv cache
 
 typedef struct {
     unsigned short buttons;    // CELL_PAD_CTRL_*
@@ -134,6 +137,45 @@ bool is_menu_key(WPARAM vk) {
     return vk == VK_F1 || vk == VK_ESCAPE;
 }
 
+// ---- Audio on/off (Insert + launcher sync) ----
+// AUDIO_MUTE is the port's live knob: "0"/unset = sound on, anything else = the mix submits
+// silence to the device at the same rate (cellAudio.c re-reads it whenever ps3_env_gen changes,
+// and ps3_setenv bumps that generation), so the audio clock and the game's pacing never change.
+// ps3_setenv is used directly because the launcher pins AUDIO_MUTE in the environment, and a
+// pinned key would make ui::settings::set skip the live application.
+
+// Reports the current AUDIO_MUTE ("0"/"1") to <data_dir>/audio-state.txt for the launcher's
+// 1 s poll. Written atomically (temp file + MoveFileExW), the same shape as settings::save's
+// users; test harness runs (empty data dir) do not write anything.
+void audio_state_publish(const char* value) {
+    const std::filesystem::path dir = ui::report::data_dir();
+    if (dir.empty()) return;
+    const std::filesystem::path file = dir / L"audio-state.txt";
+    const std::filesystem::path tmp = dir / L"audio-state.txt.tmp";
+    std::FILE* f = _wfopen(tmp.c_str(), L"w");
+    if (!f) return;
+    std::fprintf(f, "%s\n", value);
+    std::fclose(f);
+    MoveFileExW(tmp.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING);
+}
+
+// The same expression cellAudio.c's mix knob uses: "0" or absent = on; anything else = muted.
+bool audio_mute_current() {
+    const char* value = std::getenv("AUDIO_MUTE");
+    return value && *value && std::strcmp(value, "0") != 0;
+}
+
+// Applies the requested state live, keeps the settings menu and settings.ini in step, and
+// informs the launcher. Only the Insert handling in wndproc calls this, from the window's
+// message thread, so it never races the settings file writes the UI thread does.
+void audio_set_mute(bool mute, const char* why) {
+    const char* value = mute ? "1" : "0";
+    ps3_setenv("AUDIO_MUTE", value);          // live even when pinned by the launcher
+    ui::settings::set("AUDIO_MUTE", value);   // menu value + settings.ini (the env apply is a no-op then)
+    audio_state_publish(value);
+    fprintf(stderr, "[audio-toggle] %s: AUDIO_MUTE=%s (%s)\n", why, value, mute ? "muted" : "sound on");
+}
+
 // The back buffer is stretched over the client area: mouse positions are in back buffer pixels.
 void map_mouse(HWND hwnd, LPARAM lp, int& x, int& y) {
     RECT rc{};
@@ -155,6 +197,15 @@ int wndproc(void*, void* hwnd_, unsigned msg, unsigned long long wp, long long l
     case WM_KEYDOWN:
     case WM_KEYUP: {
         const bool down = msg == WM_KEYDOWN;
+        // Insert toggles the sound live, also mid-game with no menus up (the settings window's
+        // "Sound" row is this same AUDIO_MUTE knob). Only a KEYDOWN without the repeat bit
+        // (bit 30) acts, so holding the key down does not flutter. The key is consumed in both
+        // cases: neither the game's recompiled input nor the UI queue ever see it.
+        if (wp == VK_INSERT) {
+            if (down && !(lp & (1LL << 30))) audio_set_mute(!audio_mute_current(), "Insert");
+            *result = 0;
+            return 1;
+        }
         if (is_menu_key(wp) || (capturing && !(wp >= VK_F9 && wp <= VK_F12))) {
             if (!(down && (lp & (1LL << 30)) && is_menu_key(wp) && !capturing)) {  // no auto-repeat opening
                 push_event({down ? InputEvent::KeyDown : InputEvent::KeyUp, int(wp), 0, RmlWin32::GetKeyModifierState()});
@@ -377,6 +428,10 @@ void script_keys_for_frame(unsigned long long frame) {
 
 void frame(void*, void* back_buffer, unsigned index, unsigned width, unsigned height) {
     ++sFrame;
+    // One-time publication of the audio state: the launcher also learns AUDIO_MUTE's initial
+    // value (pinned by it in the environment, or loaded from settings.ini) before any toggle.
+    static std::atomic<bool> sAudioStatePublished{false};
+    if (!sAudioStatePublished.exchange(true)) audio_state_publish(audio_mute_current() ? "1" : "0");
     if (ui::report::frame_hook(sFrame)) sReportCountdown = 4;  // DES_REPORT_AT_FRAME (and the crash test knobs)
     const bool script = !sScriptKeys.empty();
     const char* shot = sShots.empty() ? nullptr : shot_for_frame(sFrame);

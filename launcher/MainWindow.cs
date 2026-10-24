@@ -13,12 +13,16 @@ public sealed class MainWindow : Window
     readonly TextBlock state=new(){TextWrapping=TextWrapping.Wrap}, detail=new(){TextWrapping=TextWrapping.Wrap}, inventory=new(){TextWrapping=TextWrapping.Wrap};
     readonly ProgressBar bar=new(){Height=8,Minimum=0,Maximum=100};
     readonly CheckBox keyboard=new(){Content="Habilitar teclado e mouse"}, vsync=new(){Content="Sincronização vertical"}, mute=new(){Content="Silenciar áudio"};
+    readonly TextBlock audioState=new(){TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray};
     readonly ComboBox windowResolution=new(), displayMode=new(), monitorSelection=new();
     readonly ListBox candidates=new(){MaxHeight=150,Visibility=Visibility.Collapsed};
     readonly Button play, import, repair, cancel, saves, diagnostics;
     CancellationTokenSource? cancellation;
     readonly Preferences preferences;
     DateTime lastProgress;
+    bool applyingFromGame;
+    internal static string? AudioStatePathForTest;
+    internal static bool? GameRunningForTest;
     public MainWindow()
     {
         Title="Demon’s Souls PC · Instalação e launcher";
@@ -133,6 +137,8 @@ public sealed class MainWindow : Window
         controlsSettings.Children.Add(new TextBlock{Text="Controles de teclado e mouse",FontSize=22,Margin=new(0,0,0,8)});
         controlsSettings.Children.Add(new TextBlock{Text="WASD: mover · mouse: câmera · botão esquerdo: ataque · botão direito: defesa · Espaço ou Shift: esquiva · E: interagir · setas: menus · Enter: confirmar · Tab: voltar · F/R: ações · Q/2: gatilhos. A captura do cursor termina ao perder foco ou usar Alt+Tab.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,0,0,10)});
         foreach(var option in new[]{keyboard,vsync,mute}){option.Foreground=Brushes.WhiteSmoke;option.Margin=new(0,8,0,8);controlsSettings.Children.Add(option);}
+        mute.Checked+=(_,_)=>{if(!applyingFromGame)ReflectAudioState();};mute.Unchecked+=(_,_)=>{if(!applyingFromGame)ReflectAudioState();};
+        controlsSettings.Children.Add(audioState);
         controlsSettings.Children.Add(Button("Salvar configurações",()=>SavePreferences()));
         controlsSettings.Children.Add(Button("Abrir cache gráfico",()=>{if(!Installation.Load(destination.Text).Complete)throw new IOException("Prepare a instalação primeiro.");RuntimeService.OpenFolder(Path.Combine(destination.Text,"userdata/cache/graphics"));}));
         controlsSettings.Children.Add(Button("Medir tamanho do cache",()=>{long bytes=Directory.Exists(Path.Combine(destination.Text,"userdata/cache/graphics"))?Installation.Inventory(Path.Combine(destination.Text,"userdata/cache/graphics")).Sum(e=>e.Length):0;detail.Text=$"Cache gráfico: {bytes/1048576.0:N1} MiB. Exclusão automática e quotas não implementadas.";}));
@@ -142,7 +148,36 @@ public sealed class MainWindow : Window
         Content=page;
         Closing+=(_,e)=>{if(cancellation!=null){cancellation.Cancel();e.Cancel=true;detail.Text="Cancelando com segurança. Aguarde a operação terminar antes de fechar.";}};
         destination.TextChanged+=(_,_)=>Refresh();Refresh();
+        var audioTimer=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};audioTimer.Tick+=(_,_)=>ReflectAudioState();audioTimer.Start();ReflectAudioState();
     }
+    // Estado do áudio: com o jogo em execução (des_boot), cortesia do arquivo audio-state.txt que o
+    // próprio jogo reescreve a cada mudança (poll de 1 s, atualização atômica no lado do jogo);
+    // sem jogo, reflete a preferência salva, que o launcher aplica via AUDIO_MUTE na inicialização.
+    void ReflectAudioState()
+    {
+        try
+        {
+            if(GameRunningForTest??(Process.GetProcessesByName("des_boot").Length>0))
+            {
+                var stateFile=AudioStatePathForTest??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"DemonsSoulsRecomp","DemonsSouls","audio-state.txt");
+                if(File.Exists(stateFile))
+                {
+                    var value=File.ReadAllText(stateFile).Trim();
+                    if(value=="0"||value=="1")
+                    {
+                        applyingFromGame=true;mute.IsChecked=value=="1";applyingFromGame=false;
+                        audioState.Text=value=="1"?"Áudio: DESATIVADO · o jogo está em execução; a tecla Insert alterna o áudio dentro do jogo.":"Áudio: ATIVADO · o jogo está em execução; a tecla Insert alterna o áudio dentro do jogo.";
+                        return;
+                    }
+                }
+                audioState.Text="Áudio: aguardando o estado do jogo · a tecla Insert alterna o áudio dentro do jogo.";
+                return;
+            }
+            audioState.Text=mute.IsChecked==true?"Áudio: DESATIVADO · preferência aplicada na próxima inicialização.":"Áudio: ATIVADO · preferência aplicada na próxima inicialização; durante o jogo, a tecla Insert alterna o áudio.";
+        }
+        catch { /* o indicador é best-effort; nunca bloqueia o launcher */ }
+    }
+    internal CheckBox MuteForTest=>mute;internal TextBlock AudioStateForTest=>audioState;internal void ReflectAudioStateForTest()=>ReflectAudioState();
     static string FindProject(){string? p=AppContext.BaseDirectory;while(p!=null){if(File.Exists(Path.Combine(p,"README.md"))&&Directory.Exists(Path.Combine(p,"port")))return p;p=Directory.GetParent(p)?.FullName;}return Environment.CurrentDirectory;}
     static void Field(Panel parent,string label,TextBox box){var l=new Label{Content=label,Foreground=Brushes.LightGray,Target=box};parent.Children.Add(l);box.MinHeight=34;box.Padding=new(8);box.Margin=new(0,0,0,5);parent.Children.Add(box);}
     Button Button(string title,Action action){var b=new Button{Content=title};System.Windows.Automation.AutomationProperties.SetName(b,title);b.Click+=(_,_)=>{try{action();}catch(Exception e){Error(e);}};return b;}
