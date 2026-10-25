@@ -132,13 +132,25 @@ dotnet publish launcher-alpha02-hotfix\DemonsSouls.Launcher.csproj -c Release -r
 
 **Honestidade sobre reprodutibilidade**: o launcher tem build única reproduzível (9.1). O runtime depende do fork upstream, da sua cópia legal decriptada localmente e do toolchain de análise documentado em `docs/03-setup.md`, `docs/06`, `docs/19` — **não há "um botão" build-all**. Builds em máquinas diferentes podem divergir em bytes do binário do autor; o launcher aprova por identidade SHA-256 (para rodar com a SUA build, reproduza os próprios gates da sua instalação).
 
+### 9.3 Pacote do launcher (zip) — `scripts/make_launcher_release.ps1`
+```powershell
+# package base (sem runtime): release\DemonSoulsPC-Launcher-Windows-x64-<versão>.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\make_launcher_release.ps1
+# opcional: incluir o runtime aprovado SOMENTE se o SHA-256 conferir;
+# o arquivo indicado nunca é comitado no repositório
+powershell ... -File scripts\make_launcher_release.ps1 -ApprovedRuntime "E:\caminho\des_boot.exe"
+```
+O zip traz `Launcher\` self-contained, `README.md` e `docs/03-setup.md`. Nenhum material derivado do jogo entra no pacote.
+
 ## 10. Executando o jogo pelo launcher
 
 1. Abra `DemonsSouls.Launcher.exe`.
-2. **PREPARAR** (nova instalação gerenciada importando sua cópia `PS3_GAME`) ou **REPARAR** (corrigir uma existente) — a pasta `PS3_GAME` original não é modificada.
-3. Em **Avançado**, confirme `des_boot.exe` (runtime aprovado) e `EBOOT.ELF`.
-4. Escolha 60 FPS e clique **JOGAR** — cada início valida SHA-256 do runtime e do EBOOT antes de liberar.
-5. Para testes, defina `DEMONS_SOULS_LAUNCHER_HOME` apontando para uma pasta isolada (não toca nas suas preferências).
+2. **SELECIONAR ISO LOCAL** — o launcher monta a imagem em modo somente leitura (se o Windows já a tiver montada, apenas usa a unidade), identifica a edição pelo `PARAM.SFO` (BLUS30443 · 01.00) e preenche a pasta de origem automaticamente. Se o Windows recusar a montagem, faça duplo clique na ISO no Explorador e repita.
+3. O **assistente de preparação** (aba Instalação) mostra, em tempo real, cada requisito: imagem/origem, `EBOOT.ELF` preparado, executável nativo aprovado, destino e espaço. Ele localiza candidatos válidos junto à imagem montada, no destino ou lembrados nas configurações e confere as identidades SHA-256 antes de liberar JOGAR.
+4. Sobre o `EBOOT.ELF`: o launcher **não descriptografa** a `EBOOT.BIN` protegida. Gere o ELF com o dump de executável do RPCS3 (rota recomendada, docs/03) ou instale uma ferramenta local própria (scetool, detectada pelo botão **DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL)**). Sem o ELF com identidade aprovada, a preparação não é declarada concluída e JOGAR permanece bloqueado.
+5. **PREPARAR / REPARAR** copia e verifica tudo (retomável por SHA-256; cancelamento seguro; a `PS3_GAME` original nunca é alterada) e, ao final, os campos passam a apontar para a cópia **instalada** do runtime e do ELF.
+6. Escolha 60 FPS e clique **JOGAR** — cada início valida SHA-256 do runtime e do EBOOT antes de liberar.
+7. Para testes, defina `DEMONS_SOULS_LAUNCHER_HOME` apontando para uma pasta isolada (não toca nas suas preferências); CLI: `--prepare-iso --iso <arquivo.iso> --destination <pasta>` (retorna 2/3/4 com o requisito exato faltando e JSON detalhado) e `--detect-tools` (diagnóstico de componentes e do ambiente de recompilação).
 
 ## 11. Verificações de integridade e identidades do runtime
 
@@ -162,13 +174,15 @@ O `EBOOT.ELF` esperado tem identidade própria (SHA-256). O launcher também val
 | Executável nativo não corresponde ao SHA | manifest da instalação aponta runtime antigo | REPARAR com runtime aprovado |
 | Onde ficam os logs | — | `%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\` |
 | CLI reprodutível (sem janela) | — | `--fps-compatibility --installation <pasta> --profile <perfil> --runtime <exe> --elf <ELF>` → JSON com `approved`/`blocker` |
+| Preparar a partir da ISO via CLI | — | `--prepare-iso --iso <arquivo.iso> --destination <pasta> [--elf <ELF>] [--runtime <exe>]` → códigos 2/3/4 = requisito exato faltando |
+| Diagnóstico de ferramentas/ambiente | — | `--detect-tools [--destination <pasta>]` → scetool detectado, candidatos, pré-requisitos do build de fonte |
 
 ## 13. Testes automatizados
 
 - `VfsPolicyTest.cs` — testes de política VFS embutidos na fonte do launcher.
-- CLI do launcher: `--fps-compatibility` (gates sem GUI), `--import`, `--repair`, etc. (ver `Program.cs`).
+- CLI do launcher: `--fps-compatibility` (gates sem GUI), `--import`, `--prepare-iso`, `--detect-tools`, `--window-test`, etc. (ver `Program.cs`).
 - `scripts/audio-ab-diagnostic.ps1` — A/B de áudio do runtime (`DES_AUDIO_NOTIFY_FIX=0/1`), gerando perfil isolado com telemetria (`AUDIO_PEAK/RATE/GAPS`).
-- Self-test completo do launcher exige manifestos de coordenação locais não distribuídos (nota de limitação documentada também nos releases).
+- Self-test (`--self-test`) roda em clone limpo: os manifestos de coordenação locais não distribuídos viram `SKIP` quando ausentes, e as identidades aprovadas continuam verificadas pelos demais casos; novas coberturas do assistente de ISO: escada de `EBOOT.ELF` (candidatos junto à origem/destino, decoys `EBOOT.BIN/SELF` ignorados), identidade por `PARAM.SFO`, sonda de ferramenta local (nunca fabrica caminho), diagnóstico honesto do ambiente de recompilação (ps3recomp nomeado explicitamente) e rejeição por identidade de binário fictício.
 - Não há suíte "pytest/CT executável de fora" neste repo: os testes de análise/boot históricos são narrados em `docs/` com evidências (hashes, logs).
 
 ## 14. Reproduzir a correção de áudio a partir do código

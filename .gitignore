@@ -78,5 +78,9 @@ tools/des/local.env
 tools/ghidra/*.log
 tools/ghidra/ghidra_one.txt
 
+# Reproducible launcher release staging/ZIP (make_launcher_release.ps1);
+# may contain the approved runtime locally, never committed.
+/release/
+
 # Claude Code per-user settings
 .claude/settings.local.json

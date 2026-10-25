@@ -133,6 +133,69 @@ public static class Program
                     finally{if(!process.HasExited){process.Kill();await process.WaitForExitAsync();}}
                     Console.WriteLine("SMOKE_COMPLETED "+run);
                 }break;
+            case "--prepare-iso":
+            {
+                string iso=Get("--iso"),prepareIsoDestination=Get("--destination");
+                var preparation=await IsoFlow.Prepare(iso,cancellation.Token);
+                Console.WriteLine(JsonSerializer.Serialize(new{
+                    iso=preparation.IsoPath,mounted=preparation.DriveRoot!=null,drive=preparation.DriveRoot,
+                    gameRoot=preparation.GameRoot,textBytes=preparation.ImageBytes,detail=preparation.Detail
+                }));
+                if(preparation.GameRoot is null)return 2;
+                Preferences safePreferences;
+                try{safePreferences=Preferences.Read();}catch{safePreferences=new();}
+                string prepareElf=args.Contains("--elf")?Get("--elf"):"";
+                string profile=args.Contains("--profile")?Get("--profile"):safePreferences.RuntimeProfile;
+                if(string.IsNullOrWhiteSpace(prepareElf))
+                {
+                    string rememberedElf=safePreferences.EbootPath;
+                    string? ladderElf=IsoFlow.FindEbootElf(preparation.GameRoot,prepareIsoDestination,rememberedElf,false);
+                    if(ladderElf is null)
+                    {
+                        var probe=IsoFlow.FindScetool();
+                        string elfDetail=probe.Path is null?probe.Detail:"Ferramenta local detectada; gere o ELF pelo launcher (botão DESCRIPTOGRAFAR EBOOT.BIN) ou pelo RPCS3 e repita --prepare-iso.";
+                        Console.WriteLine(JsonSerializer.Serialize(new{stage="elf-missing",elfCandidates=IsoFlow.EbootElfCandidates(preparation.GameRoot,prepareIsoDestination,rememberedElf),scetool=probe.Path,detail=elfDetail}));
+                        return 3;
+                    }
+                    prepareElf=ladderElf;
+                }
+                string prepareRuntime=args.Contains("--runtime")?Get("--runtime"):"";
+                if(string.IsNullOrWhiteSpace(prepareRuntime))
+                {
+                    string? ladderRuntime=IsoFlow.FindApprovedRuntime(prepareIsoDestination,safePreferences.RuntimeExecutable);
+                    if(ladderRuntime is null)
+                    {
+                        Console.WriteLine(JsonSerializer.Serialize(new{stage="runtime-missing",runtimeCandidates=IsoFlow.RuntimeCandidates(prepareIsoDestination,safePreferences.RuntimeExecutable),
+                            detail="Use des_boot.exe aprovado (pasta Game do pacote ou sua cópia anterior) e informe com --runtime; o launcher não gera o executável a partir da ISO — o build de fonte exige o ambiente de desenvolvedor (ps3recomp fork + material de lifter não distribuído)."}));
+                        return 4;
+                    }
+                    prepareRuntime=ladderRuntime;
+                }
+                Console.WriteLine("PREPARE_ISO elf="+prepareElf+" runtime="+prepareRuntime);
+                await Installation.Import(preparation.GameRoot,prepareIsoDestination,prepareElf,prepareRuntime,progress,cancellation.Token);
+                var manifest=Installation.Load(prepareIsoDestination);
+                string? fpsBlocker=await RuntimeService.Get60FpsCompatibilityBlockerAsync(prepareIsoDestination,profile,cancellation.Token,
+                    useExistingInstallation:false,runtimeExecutable:prepareRuntime,ebootPath:prepareElf);
+                Console.WriteLine(JsonSerializer.Serialize(new{stage="ready",destination=prepareIsoDestination,complete=manifest.Complete,
+                    files=manifest.Files.Count,elf=prepareElf,runtime=prepareRuntime,fpsApproved=fpsBlocker is null,blocker=fpsBlocker}));
+                if(!manifest.Complete)return 5;
+                if(fpsBlocker is not null)return 6;
+                break;
+            }
+            case "--detect-tools":
+            {
+                string detectDestination=args.Contains("--destination")?Get("--destination"):"";
+                string detectRememberedElf=args.Contains("--remembered-elf")?Get("--remembered-elf"):"";
+                string detectRememberedRuntime=args.Contains("--remembered-runtime")?Get("--remembered-runtime"):"";
+                var scetoolProbe=IsoFlow.FindScetool();
+                Console.WriteLine(JsonSerializer.Serialize(new{
+                    scetool=scetoolProbe.Path,scetoolDetail=scetoolProbe.Detail,
+                    elfCandidates=IsoFlow.EbootElfCandidates(null,detectDestination,detectRememberedElf),
+                    runtimeCandidates=IsoFlow.RuntimeCandidates(detectDestination,detectRememberedRuntime),
+                    nativeBuildEnvironment=IsoFlow.NativeBuildEnvironment().Select(r=>new{requirement=r.Requirement,present=r.Present,hint=r.Hint})
+                }));
+                break;
+            }
             default:throw new ArgumentException("Comando desconhecido.");
         }
         return 0;

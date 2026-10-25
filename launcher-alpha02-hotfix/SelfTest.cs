@@ -32,7 +32,7 @@ public static class SelfTest
             string path=Path.Combine(directory.FullName,"recovery","coordination","ENGINE-ALPHA02-60FPS-HANDOFF.json");
             if(File.Exists(path))return path;
         }
-        throw new FileNotFoundException("O manifesto local de integração não foi encontrado acima do diretório do self-test.");
+        throw new FileNotFoundException("O manifesto local de integraÃ§Ã£o nÃ£o foi encontrado acima do diretÃ³rio do self-test.");
     }
     static string FindCoordinationFile(string name)
     {
@@ -41,28 +41,38 @@ public static class SelfTest
             string path=Path.Combine(directory.FullName,"recovery","coordination",name);
             if(File.Exists(path))return path;
         }
-        throw new FileNotFoundException("Arquivo de coordenação não encontrado: "+name);
+        throw new FileNotFoundException("Arquivo de coordenaÃ§Ã£o nÃ£o encontrado: "+name);
     }
     public static async Task Run()
     {
         if(Environment.GetEnvironmentVariable("DEMONS_SOULS_LAUNCHER_HOME") is { Length: > 0 } configuredHome)
             Environment.SetEnvironmentVariable("DEMONS_SOULS_LAUNCHER_HOME",
                 Path.Combine(Path.GetFullPath(configuredHome),"self-test-"+Guid.NewGuid().ToString("N")));
-        string referencePath=FindCoordinationFile("ENGINE-ALPHA02-60FPS-INICIADOR-REFERENCIA.txt");
-        string referenceHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(referencePath)));
-        Assert(referenceHash=="243C6780C5158E2BAC577B3016F0238243B630639703F7CE8C23735579AB1EFC","reference starter hash matches the user-provided fingerprint; it is read, never executed");
-        using var contract=System.Text.Json.JsonDocument.Parse(File.ReadAllText(FindCoordinationFile("ENGINE-ALPHA02-60FPS-LAUNCH-CONTRACT.json")));
-        var contractRoot=contract.RootElement;
-        Assert(contractRoot.GetProperty("schemaVersion").GetInt32()==1&&contractRoot.GetProperty("runtimeIdentity").GetProperty("executableSha256RequiredFor60Fps").GetString()==RuntimeService.Approved60FpsRuntimeSha256.ToUpperInvariant(),"structured launch contract pins the approved runtime identity");
-        Assert(contractRoot.GetProperty("runtimeIdentity").GetProperty("elfSha256").GetString()==RuntimeService.ApprovedElfSha256.ToUpperInvariant(),"structured launch contract pins the approved ELF identity");
-        Assert(contractRoot.GetProperty("reference").GetProperty("sha256").GetString()==referenceHash,"structured contract records the exact reference initiator fingerprint");
-        Assert(contractRoot.GetProperty("configurablePaths").GetProperty("installationRoot").GetString()=="User-selected Preferences.Installation","launch contract derives paths from the user's installation preference");
-        var contractEnvironment=contractRoot.GetProperty("environment");
-        var handoff=RuntimeService.RuntimeHandoffManifest.Load(FindRuntimeHandoffManifest());
-        Assert(handoff.Project=="Demons Souls PC"&&handoff.Version=="Alpha 0.2"&&Path.GetFileName(handoff.ExecutablePath).Equals("des_boot.exe",StringComparison.OrdinalIgnoreCase),"local handoff manifest identifies the Alpha 0.2 runtime without accessing its external executable");
-        Assert(RuntimeService.IsApproved60FpsRuntimeHash(handoff.Sha256)&&handoff.AvailableFrameRates.SequenceEqual(new[]{60})&&handoff.FrameRateVariable=="DES_FPS","handoff manifest fingerprint and unique 60 FPS contract match the launcher's pinned identity");
-        Assert(handoff.LauncherIntegration.Contains("Pendente",StringComparison.OrdinalIgnoreCase)&&handoff.CompleteLaunchProfile.Contains("Pendente",StringComparison.OrdinalIgnoreCase),"handoff manifest does not claim complete launcher integration or startup profile");
-        Console.WriteLine("PASS: local handoff manifest structure, runtime identity and pending-profile status (external executable not accessed)");
+        bool coordinationAvailable=true;
+        System.Text.Json.JsonElement contractEnvironment=default;
+        try
+        {
+            string referencePath=FindCoordinationFile("ENGINE-ALPHA02-60FPS-INICIADOR-REFERENCIA.txt");
+            string referenceHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(referencePath)));
+            Assert(referenceHash=="243C6780C5158E2BAC577B3016F0238243B630639703F7CE8C23735579AB1EFC","reference starter hash matches the user-provided fingerprint; it is read, never executed");
+            using var contract=System.Text.Json.JsonDocument.Parse(File.ReadAllText(FindCoordinationFile("ENGINE-ALPHA02-60FPS-LAUNCH-CONTRACT.json")));
+            var contractRoot=contract.RootElement;
+            Assert(contractRoot.GetProperty("schemaVersion").GetInt32()==1&&contractRoot.GetProperty("runtimeIdentity").GetProperty("executableSha256RequiredFor60Fps").GetString()==RuntimeService.Approved60FpsRuntimeSha256.ToUpperInvariant(),"structured launch contract pins the approved runtime identity");
+            Assert(contractRoot.GetProperty("runtimeIdentity").GetProperty("elfSha256").GetString()==RuntimeService.ApprovedElfSha256.ToUpperInvariant(),"structured launch contract pins the approved ELF identity");
+            Assert(contractRoot.GetProperty("reference").GetProperty("sha256").GetString()==referenceHash,"structured contract records the exact reference initiator fingerprint");
+            Assert(contractRoot.GetProperty("configurablePaths").GetProperty("installationRoot").GetString()=="User-selected Preferences.Installation","launch contract derives paths from the user's installation preference");
+            contractEnvironment=contractRoot.GetProperty("environment").Clone();
+            var handoff=RuntimeService.RuntimeHandoffManifest.Load(FindRuntimeHandoffManifest());
+            Assert(handoff.Project=="Demons Souls PC"&&handoff.Version=="Alpha 0.2"&&Path.GetFileName(handoff.ExecutablePath).Equals("des_boot.exe",StringComparison.OrdinalIgnoreCase),"local handoff manifest identifies the Alpha 0.2 runtime without accessing its external executable");
+            Assert(RuntimeService.IsApproved60FpsRuntimeHash(handoff.Sha256)&&handoff.AvailableFrameRates.SequenceEqual(new[]{60})&&handoff.FrameRateVariable=="DES_FPS","handoff manifest fingerprint and unique 60 FPS contract match the launcher's pinned identity");
+            Assert(handoff.LauncherIntegration.Contains("Pendente",StringComparison.OrdinalIgnoreCase)&&handoff.CompleteLaunchProfile.Contains("Pendente",StringComparison.OrdinalIgnoreCase),"handoff manifest does not claim complete launcher integration or startup profile");
+            Console.WriteLine("PASS: local handoff manifest structure, runtime identity and pending-profile status (external executable not accessed)");
+        }
+        catch(FileNotFoundException missingCoordination)
+        {
+            coordinationAvailable=false;
+            Console.WriteLine("SKIP: "+missingCoordination.Message.Trim()+"; manifestos locais de coordenaÃ§Ã£o nÃ£o versionados (clone limpo) â€” as identidades aprovadas continuam fixadas por outros testes.");
+        }
         var defaults=new Preferences();
         Assert(defaults.FrameRate==60,"default frame rate is the sole 60 FPS profile");
         string localData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -77,12 +87,12 @@ public static class SelfTest
         Directory.CreateDirectory(Path.Combine(parentSelection,"actual-installation"));
         bool parentExplained=false;
         try{_ = Installation.ValidateExistingSelection(parentSelection);}
-        catch(IOException e){parentExplained=e.Message.Contains("diretório pai",StringComparison.OrdinalIgnoreCase)&&e.Message.Contains("installation.json",StringComparison.OrdinalIgnoreCase);}
+        catch(IOException e){parentExplained=e.Message.Contains("diretÃ³rio pai",StringComparison.OrdinalIgnoreCase)&&e.Message.Contains("installation.json",StringComparison.OrdinalIgnoreCase);}
         Assert(parentExplained,"selecting a parent instead of the folder containing installation.json gives actionable guidance without accepting it");
         Console.WriteLine("PASS: existing-install selection rejects an incorrect parent folder with explicit guidance");
 
         string traceFile;
-        using(var trace=OperationTrace.Start("Teste sintético de rastreamento"))
+        using(var trace=OperationTrace.Start("Teste sintÃ©tico de rastreamento"))
         {
             traceFile=trace.LogPath;
             using(trace.Activate())
@@ -99,13 +109,13 @@ public static class SelfTest
             traceRecords.Any(line=>line.Contains("\"operation_finished\"",StringComparison.Ordinal)),
             "operation log records phase start/end, file/byte counts, elapsed duration and operation completion");
         string failureLog;
-        using(var failedTrace=OperationTrace.Start("Teste sintético de falha"))
+        using(var failedTrace=OperationTrace.Start("Teste sintÃ©tico de falha"))
         {
             failureLog=failedTrace.LogPath;
-            failedTrace.Fail(new IOException("falha sintética de leitura/gravação"));
+            failedTrace.Fail(new IOException("falha sintÃ©tica de leitura/gravaÃ§Ã£o"));
         }
         using var failureRecord=System.Text.Json.JsonDocument.Parse(File.ReadLines(failureLog).Last());
-        Assert(failureRecord.RootElement.GetProperty("error").GetString()!.Contains("falha sintética de leitura/gravação",StringComparison.Ordinal),
+        Assert(failureRecord.RootElement.GetProperty("error").GetString()!.Contains("falha sintÃ©tica de leitura/gravaÃ§Ã£o",StringComparison.Ordinal),
             "operation failure log records the concrete exception message");
         Console.WriteLine("PASS: operation phase trace records boundaries, durations and counts");
         string diagnosticFixture=Path.Combine(testRoot,"diagnostic-"+Guid.NewGuid().ToString("N")+".bin");
@@ -146,12 +156,12 @@ public static class SelfTest
             Assert(!launcherWindow.CompactLayoutForTest.Settings&&launcherWindow.SettingsWidthFitsForTest(width),"wide settings fit normal and high-DPI logical widths without horizontal overflow");
         }
         Console.WriteLine("PASS: settings layout at compact, normal, and high-DPI logical widths");
-        Assert(launcherWindow.GetPlayDisabledReasonForTest().Contains("prepare a instalação",StringComparison.OrdinalIgnoreCase),"disabled Play button explains that installation is required");
+        Assert(launcherWindow.GetPlayDisabledReasonForTest().Contains("prepare a instalaÃ§Ã£o",StringComparison.OrdinalIgnoreCase),"disabled Play button explains that installation is required");
         string invalidManifestRoot=Path.Combine(testRoot,"DemonsLauncher-invalid-manifest-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(invalidManifestRoot);
         File.WriteAllText(Path.Combine(invalidManifestRoot,"installation.json"),"{");
         string invalidManifestState=launcherWindow.SetDestinationForTest(invalidManifestRoot);
-        Assert(invalidManifestState.Contains("Detalhe:",StringComparison.Ordinal)&&launcherWindow.GetPlayDisabledReasonForTest().Contains("JOGAR indisponível:",StringComparison.Ordinal),"invalid manifest state shows its specific cause and explains why Play is disabled");
+        Assert(invalidManifestState.Contains("Detalhe:",StringComparison.Ordinal)&&launcherWindow.GetPlayDisabledReasonForTest().Contains("JOGAR indisponÃ­vel:",StringComparison.Ordinal),"invalid manifest state shows its specific cause and explains why Play is disabled");
         string launcherLog=Path.Combine(Preferences.UserDataDirectory,"logs","launcher.log");
         Assert(File.Exists(launcherLog)&&File.ReadAllText(launcherLog).Contains("JsonException",StringComparison.Ordinal),"invalid manifest error is recorded in the isolated launcher log");
         Console.WriteLine("PASS: invalid installation manifest shows the concrete parsing error and logs its cause");
@@ -188,7 +198,7 @@ public static class SelfTest
             Assert(delayedWork.GetAwaiter().GetResult()&&progressBarShown,
                 "the yellow operation bar becomes visible during a long-running verification even without byte progress callbacks");
 
-            Task<bool> failedWork=launcherWindow.WorkForTest((_,_)=>Task.FromException(new IOException("falha sintética de finalização")));
+            Task<bool> failedWork=launcherWindow.WorkForTest((_,_)=>Task.FromException(new IOException("falha sintÃ©tica de finalizaÃ§Ã£o")));
             Assert(launcherWindow.OperationBusyForTest&&!launcherWindow.PlayEnabledForTest,
                 "Play is disabled during a second preparation attempt");
             PumpUntil(failedWork);
@@ -207,7 +217,7 @@ public static class SelfTest
         var saved60=Preferences.Read(settingsFixture);
         Assert(saved60.FrameRate==60&&RuntimeService.FrameRateSettings(saved60)["DES_FPS"]=="60","60 FPS persists and maps to DES_FPS=60");
         Assert(launcherWindow.IsFrameRateAvailableForTest(60),"approved runtime identity enables the 60 FPS option");
-        Assert(launcherWindow.FrameRateStatusForTest.Contains("Teste sintético",StringComparison.OrdinalIgnoreCase)&&launcherWindow.FrameRateStatusForTest.Contains("não valida",StringComparison.OrdinalIgnoreCase),"synthetic 60 FPS selection explicitly does not claim real-runtime compatibility");
+        Assert(launcherWindow.FrameRateStatusForTest.Contains("Teste sintÃ©tico",StringComparison.OrdinalIgnoreCase)&&launcherWindow.FrameRateStatusForTest.Contains("nÃ£o valida",StringComparison.OrdinalIgnoreCase),"synthetic 60 FPS selection explicitly does not claim real-runtime compatibility");
         foreach(int rate in new[]{60})
         {
             var persisted=new Preferences{FrameRate=rate,RuntimeProfile=Path.Combine(testRoot,"persisted-profile-"+rate),
@@ -230,13 +240,13 @@ public static class SelfTest
                 pending.SetResult(null);
                 PumpUntil(save);
                 Assert(Preferences.Read().FrameRate==60,"successful verification saves reopened 60 FPS without false failure");
-                foreach(string reason in new[]{"executável não validado","SHA-256 divergente"})
+                foreach(string reason in new[]{"executÃ¡vel nÃ£o validado","SHA-256 divergente"})
                 {
                     before=File.ReadAllText(Preferences.FilePath);
                     bool rejected=false;
                     try{PumpUntil(reopened.SaveValidatedPreferences(syntheticCheck:()=>Task.FromResult<string?>(reason)));}
                     catch(IOException e){rejected=e.Message.Contains(reason)&&
-                        !MainWindow.FriendlyError(e.Message).Contains("operação não foi concluída");}
+                        !MainWindow.FriendlyError(e.Message).Contains("operaÃ§Ã£o nÃ£o foi concluÃ­da");}
                     Assert(rejected&&File.ReadAllText(Preferences.FilePath)==before,
                         "unverified or mismatched identity blocks persistence with actionable FPS guidance: "+reason);
                 }
@@ -251,7 +261,7 @@ public static class SelfTest
         Console.WriteLine("PASS: unique 60 FPS persistence, reopen, compatibility gate, runtime mapping and invalid-setting rejection");
         Assert(RuntimeService.IsApproved60FpsRuntimeHash(RuntimeService.Approved60FpsRuntimeSha256),"approved 60 FPS runtime fingerprint is recognized");
         Assert(!RuntimeService.IsApproved60FpsRuntimeHash(new string('0',64)),"unrecognized runtime fingerprint cannot enable 60 FPS");
-        foreach(var (resolution,width,height,label) in new[]{("1280x720","1280","720","1280 × 720"),("1600x900","1600","900","1600 × 900"),("1920x1080","1920","1080","1920 × 1080")})
+        foreach(var (resolution,width,height,label) in new[]{("1280x720","1280","720","1280 Ã— 720"),("1600x900","1600","900","1600 Ã— 900"),("1920x1080","1920","1080","1920 Ã— 1080")})
         foreach(var (mode,borderless) in new[]{("windowed","0"),("borderless","1"),("fullscreen","1")})
         {
             launcherWindow.SelectVideoOptionsForTest(resolution,mode,settingsFixture);
@@ -259,12 +269,12 @@ public static class SelfTest
             Assert(reloaded.WindowResolution==resolution&&reloaded.DisplayMode==mode&&!string.IsNullOrWhiteSpace(reloaded.MonitorDevice),"launcher ComboBox selection and saved preferences");
             var labels=launcherWindow.ComboBoxLabelsForTest();
             Assert(labels[0]==(label,"Label")&&labels[1]==((mode=="windowed"?"Janela":mode=="borderless"?"Janela sem bordas":"Tela cheia sem bordas"),"Label")&&
-                labels[2].BindingPath=="Label"&&labels[2].Label.Contains(" — ",StringComparison.Ordinal),"selected ComboBoxes render friendly resolution, mode, and monitor labels");
+                labels[2].BindingPath=="Label"&&labels[2].Label.Contains(" Ã— ",StringComparison.Ordinal),"selected ComboBoxes render friendly resolution, mode, and monitor labels");
             var video=RuntimeService.VideoSettings(reloaded);
             Assert(video["RSX_WINDOW_W"]==width&&video["RSX_WINDOW_H"]==height&&video["RSX_BORDERLESS"]==borderless&&video["RSX_DISPLAY_MODE"]==mode&&video["RSX_MONITOR_DEVICE"]==reloaded.MonitorDevice,"video setting to runtime environment mapping");
         }
         var friendlyOptions=launcherWindow.AllComboOptionLabelsForTest;
-        Assert(friendlyOptions[0].SequenceEqual(new[]{"1280 × 720","1600 × 900","1920 × 1080"})&&
+        Assert(friendlyOptions[0].SequenceEqual(new[]{"1280 Ã— 720","1600 Ã— 900","1920 Ã— 1080"})&&
             friendlyOptions[1].SequenceEqual(new[]{"Janela","Janela sem bordas","Tela cheia sem bordas"})&&
             friendlyOptions[3].SequenceEqual(new[]{"60 FPS"}),"all open ComboBox options use friendly labels while retaining typed values");
         Assert(launcherWindow.ComboBoxLabelsForTest()[3]==("60 FPS","Label"),"selected frame-rate ComboBox renders the unique 60 FPS profile");
@@ -302,7 +312,8 @@ public static class SelfTest
             var env=RuntimeService.LaunchSettings(dest,profile,session,preferences);
             var requiredEnvironment=new[]{"PS3_VFS_ROOT","PS3_USRDIR_BASE","PS3_HDD0_ROOT","PS3_DEV_FLASH","PS3_SHADER_CACHE","DES_DATA_DIR","DES_SETTINGS","DES_KIND","DES_UI","DES_SKIP_UI","DES_PRECOMPILE","DES_FPS","VBLANK_MHZ","DES_VSYNC","DES_AUTO_CONTINUE","DES_SKIP_INTRO","PS3_SAIL_MOVIES","PAD_PC_INPUT","PAD_MOUSE_SENS","PAD_MOUSE_SENS_X","PAD_MOUSE_SENS_Y","AUDIO_MUTE","PS3_VERBOSE","DES_REPORT_NO_OPEN","PS3_PIDFILE","DES_GAME_LOG","DES_RUNTIME_LOG","DES_FRAMELOG","FRAME_LOG","RSX_WINDOW_DIAG","RSX_HOTKEY_DIR","CELLMARK_DUMP_DIR","PROF_DIR","RSX_WINDOW_W","RSX_WINDOW_H","RSX_DISPLAY_MODE","RSX_BORDERLESS","RSX_MONITOR_DEVICE","APPDATA","LOCALAPPDATA","TEMP","TMP"};
             Assert(requiredEnvironment.All(env.ContainsKey),"launch environment includes every normal-play variable from the reference");
-            Assert(requiredEnvironment.All(key=>contractEnvironment.TryGetProperty(key,out _)),"structured launch contract covers every environment key passed to the runtime");
+            if(coordinationAvailable)
+                Assert(requiredEnvironment.All(key=>contractEnvironment.TryGetProperty(key,out _)),"structured launch contract covers every environment key passed to the runtime");
             Assert(env["DES_FPS"]==rate.ToString()&&env["VBLANK_MHZ"]=="59940"&&env["DES_KIND"]=="play"&&env["DES_VSYNC"]==(rate==60?"1":"0"),"launch environment maps settings and preserves reference VBlank for "+rate+" FPS");
             Assert(env["DES_UI"]=="1"&&env["DES_SKIP_UI"]=="1"&&env["DES_PRECOMPILE"]=="1"&&env["DES_AUTO_CONTINUE"]=="0"&&env["DES_SKIP_INTRO"]=="1"&&env["PS3_SAIL_MOVIES"]=="0"&&env["DES_REPORT_NO_OPEN"]=="1","launch flags match the functional reference profile");
             Assert(env["PS3_HDD0_ROOT"].StartsWith(profile,StringComparison.OrdinalIgnoreCase)&&env["PS3_SHADER_CACHE"].StartsWith(profile,StringComparison.OrdinalIgnoreCase)&&env["DES_RUNTIME_LOG"].StartsWith(Path.Combine(profile,"logs"),StringComparison.OrdinalIgnoreCase),"saves, shader cache and per-session logs remain isolated under the separate configurable profile");
@@ -326,7 +337,7 @@ public static class SelfTest
             Environment.SetEnvironmentVariable("EXIT_AUTOPRESS",priorExit);
             Environment.SetEnvironmentVariable("RF_SLOW_MS",priorSlow);
             Assert(!start.Environment.ContainsKey("EXIT_AUTOPRESS")&&!start.Environment.ContainsKey("RF_SLOW_MS")&&start.Environment["DES_FPS"]==rate.ToString(),"inherited timing and automated-input environment overrides are removed");
-            using var probe=Process.Start(start)??throw new IOException("Não foi possível iniciar o processo sintético.");
+            using var probe=Process.Start(start)??throw new IOException("NÃ£o foi possÃ­vel iniciar o processo sintÃ©tico.");
             string stdout=await probe.StandardOutput.ReadToEndAsync(),stderr=await probe.StandardError.ReadToEndAsync();
             await probe.WaitForExitAsync();
             Assert(probe.ExitCode==0&&stdout.Trim()==$"{rate} 59940 play","synthetic child process receives the requested launch environment and rejects inherited timing/control overrides (stderr: "+stderr.Trim()+")");
@@ -636,7 +647,47 @@ public static class SelfTest
             else
                 Console.WriteLine("SKIP: junction rejection fixtures unavailable ("+(await stderr+await stdout).Trim()+")");
         }
+        TestIsoFlowSupport(source,dest,test);
         Console.WriteLine("SELF_TEST_PASS "+test);
+    }
+    static void TestIsoFlowSupport(string source,string dest,string test)
+    {
+        // ELF ladder with fixture-checker semantics: the prepared ELF beside
+        // the source tree is resolved and EBOOT.BIN/SELF decoys are ignored
+        // without ever touching them.
+        string elfSource=Path.Combine(test,"isoflow-elf-source");Directory.CreateDirectory(elfSource);
+        File.WriteAllBytes(Path.Combine(elfSource,"EBOOT.BIN"),new byte[]{1,2,3});
+        File.WriteAllText(Path.Combine(elfSource,"decoy.elf"),"not an elf");
+        Directory.CreateDirectory(Path.Combine(elfSource,"PS3_GAME","USRDIR"));
+        byte[] elfFixture=File.ReadAllBytes(Path.Combine(test,"test.elf"));
+        string validElf=Path.Combine(elfSource,"PS3_GAME","USRDIR","EBOOT.ELF");
+        File.WriteAllBytes(validElf,elfFixture);
+        string? resolved=IsoFlow.FindEbootElf(Path.Combine(elfSource,"PS3_GAME"),dest,"",fixture:true);
+        Assert(resolved!=null&&string.Equals(Path.GetFullPath(resolved!),Path.GetFullPath(validElf),StringComparison.OrdinalIgnoreCase),
+            "ELF ladder resolves the prepared ELF beside the source tree and ignores EBOOT.BIN/SELF decoys");
+        string emptyRoot=Path.Combine(test,"isoflow-empty-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(emptyRoot);
+        Assert(IsoFlow.FindEbootElf(emptyRoot,"","",fixture:true) is null,"ELF ladder returns null when no candidate exists");
+        // Identity description reuses the strict SFO parser without mounting.
+        string describe=IsoFlow.Describe(source,8869122560);
+        Assert(describe.Contains("BLUS30443",StringComparison.Ordinal)&&describe.Contains("01.00",StringComparison.Ordinal),
+            "ISO identity description reports the pinned edition and version from PARAM.SFO");
+        // Tool probe never invents a tool; detection only reports real,
+        // user-installed scetool copies and otherwise explains the RPCS3 route.
+        var scetool=IsoFlow.FindScetool();
+        Assert(scetool.Path is null||Path.GetFileName(scetool.Path!).Equals("scetool.exe",StringComparison.OrdinalIgnoreCase),
+            "scetool probe never fabricates a tool path");
+        // Native rebuild diagnostic is structural and honest about the fork.
+        var native=IsoFlow.NativeBuildEnvironment();
+        Assert(native.Count>=8&&native.All(r=>!string.IsNullOrWhiteSpace(r.Requirement)&&!string.IsNullOrWhiteSpace(r.Hint)),
+            "native rebuild diagnostic lists named prerequisites with actionable hints");
+        Assert(native.Any(r=>r.Requirement.Contains("ps3recomp",StringComparison.OrdinalIgnoreCase)),
+            "native rebuild diagnostic names the external ps3recomp lifter fork explicitly");
+        // Runtime ladder never approves an unknown binary by structure alone:
+        // a tiny fake des_boot.exe must not satisfy it.
+        string fakeRuntime=Path.Combine(test,"isoflow-fake-des_boot.exe");File.WriteAllBytes(fakeRuntime,new byte[2048]);
+        Assert(!RuntimeService.IsApproved60FpsRuntimeHash(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(fakeRuntime)))),
+            "runtime ladder rejects a fixture binary by identity");
+        Console.WriteLine("PASS: ISO preparation assistant components (ELF ladder, identity, tool probe, native-build diagnostic, runtime identity)");
     }
     sealed class CancelProgress(CancellationTokenSource cts):IProgress<Transfer>{public void Report(Transfer p){if(p.Phase.Contains("Copiando",StringComparison.OrdinalIgnoreCase)&&p.Copied>=1024*1024)cts.Cancel();}}
     sealed class CaptureProgress:IProgress<Transfer>

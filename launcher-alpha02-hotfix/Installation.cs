@@ -1313,7 +1313,7 @@ public static class Installation
         if (string.IsNullOrWhiteSpace(destination))
             throw new IOException("Informe o destino da instalação antes de preparar/reparar.");
         if (string.IsNullOrWhiteSpace(elf))
-            throw new IOException("Informe em Avançado o caminho do EBOOT.ELF preparado antes de preparar/reparar.");
+            throw new IOException("Informe o EBOOT.ELF preparado no assistente de preparação (aba Instalação) ou em Avançado antes de preparar/reparar.");
         if (string.IsNullOrWhiteSpace(runtime))
             throw new IOException("Informe em Avançado o caminho do des_boot.exe antes de preparar/reparar.");
         string source,dest;

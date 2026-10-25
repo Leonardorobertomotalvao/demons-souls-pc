@@ -14,6 +14,9 @@ public sealed class MainWindow : Window
     readonly TextBlock state=new(){TextWrapping=TextWrapping.Wrap}, detail=new(){TextWrapping=TextWrapping.Wrap}, inventory=new(){TextWrapping=TextWrapping.Wrap};
     readonly TextBlock operationStage=new(){TextWrapping=TextWrapping.Wrap,Foreground=new SolidColorBrush(Color.FromRgb(216,189,124))};
     readonly TextBlock playReason=new(){TextWrapping=TextWrapping.Wrap,Foreground=new SolidColorBrush(Color.FromRgb(224,199,137))};
+    readonly TextBlock prepChecklist=new(){TextWrapping=TextWrapping.Wrap,Foreground=new SolidColorBrush(Color.FromRgb(224,199,137)),Margin=new(0,4,0,2)};
+    readonly Dictionary<string,(long Length,DateTime WriteUtc,bool Approved)> componentIdentity=new(StringComparer.OrdinalIgnoreCase);
+    string lastIsoDetail="";
     readonly ProgressBar bar=new()
     {
         Height=8,Minimum=0,Maximum=100,
@@ -193,6 +196,14 @@ public sealed class MainWindow : Window
         var operations=new WrapPanel();
         import=Button("PREPARAR / REPARAR",Install); cancel=Button("Cancelar",()=>cancellation?.Cancel()); cancel.IsEnabled=false;
         operations.Children.Add(import); operations.Children.Add(cancel); setup.Children.Add(operations);
+        setup.Children.Add(new TextBlock{Text="Assistente de preparação a partir da ISO",FontSize=16,FontWeight=FontWeights.SemiBold,Margin=new(0,10,0,2)});
+        setup.Children.Add(prepChecklist);
+        var componentShortcuts=new WrapPanel();
+        componentShortcuts.Children.Add(Button("SELECIONAR EBOOT.ELF",()=>ChooseFile(elf,"ELF preparado|*.elf")));
+        componentShortcuts.Children.Add(Button("SELECIONAR EXECUTÁVEL NATIVO",()=>ChooseFile(runtime,"Executável nativo|*.exe")));
+        componentShortcuts.Children.Add(Button("DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL)",DecryptWithLocalTool));
+        setup.Children.Add(componentShortcuts);
+        setup.Children.Add(new TextBlock{Text="O assistente localiza automaticamente componentes já preparados (junto à imagem montada, no destino informado ou lembrados nas configurações) e confere a identidade SHA-256 antes de habilitar JOGAR. O launcher não descriptografa a EBOOT.BIN protegida sozinho: gere o EBOOT.ELF com o dump de executável do RPCS3 (docs/03-setup.md) ou com uma ferramenta local instalada por você. A imagem e a origem nunca são alteradas.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,4,0,8)});
         setup.Children.Add(new TextBlock{Text="PREPARAR / REPARAR atua somente em cópias locais gerenciadas pelo launcher; fica desativado no modo de instalação existente.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,4,0,8)});
         tabs.Items.Add(new TabItem{Header="Instalação",Content=new ScrollViewer{Content=setup,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,CanContentScroll=true,Padding=new(4)}});
         var settings=new Grid{Margin=new(0,0,0,8)};
@@ -247,11 +258,12 @@ public sealed class MainWindow : Window
         footer.Children.Add(bar);operationStage.Margin=new(0,5,0,0);footer.Children.Add(operationStage);
         detail.Margin=new(0,3,0,0);if(preferencesWarning is not null)detail.Text=preferencesWarning;footer.Children.Add(detail);
         inventory.Margin=new(0,3,0,0);inventory.Foreground=Brushes.LightGray;footer.Children.Add(inventory);
-        footer.Children.Add(new TextBlock{Text="Launcher Alpha 0.2 · versão 0.2.0-alpha.2",Foreground=Brushes.Gray,FontSize=11,TextWrapping=TextWrapping.Wrap,Margin=new(0,5,0,0)});
+        footer.Children.Add(new TextBlock{Text="Launcher Alpha 0.2 · versão 0.2.1-alpha.1",Foreground=Brushes.Gray,FontSize=11,TextWrapping=TextWrapping.Wrap,Margin=new(0,5,0,0)});
         Grid.SetRow(footer,2);page.Children.Add(footer);
         Content=page;
         Closing+=(_,e)=>{if(cancellation!=null){cancellation.Cancel();e.Cancel=true;detail.Text="Cancelando com segurança. Aguarde a operação terminar antes de fechar.";}};
         destination.TextChanged+=(_,_)=>{Refresh();_ = RefreshRuntimeCompatibility();};
+        source.TextChanged+=(_,_)=>Refresh();
         runtime.TextChanged+=(_,_)=>_ = RefreshRuntimeCompatibility();
         runtimeProfile.TextChanged+=(_,_)=>_ = RefreshRuntimeCompatibility();
         elf.TextChanged+=(_,_)=>_ = RefreshRuntimeCompatibility();
@@ -419,7 +431,7 @@ public sealed class MainWindow : Window
             return "Foi encontrada uma divergência de integridade. Confira o arquivo indicado no detalhe; os dados foram preservados.";
         if(message.Contains("PS3_GAME",StringComparison.OrdinalIgnoreCase))return "Não foi possível localizar uma pasta de jogo compatível. Escolha outra pasta ou uma imagem montada pelo Windows.";
         if(message.Contains("BLUS30443",StringComparison.OrdinalIgnoreCase)||message.Contains("APP_VER",StringComparison.OrdinalIgnoreCase))return "Esta edição não é compatível. O launcher aceita somente a edição norte-americana, versão 1.00.";
-        if(message.Contains("EBOOT.ELF",StringComparison.OrdinalIgnoreCase)||message.Contains("ELF PPC64",StringComparison.OrdinalIgnoreCase))return "Falta um componente local compatível. Consulte a seção Avançado para ver os requisitos.";
+        if(message.Contains("EBOOT.ELF",StringComparison.OrdinalIgnoreCase)||message.Contains("ELF PPC64",StringComparison.OrdinalIgnoreCase))return "Falta um componente local compatível. Use o assistente de preparação na aba Instalação (SELECIONAR EBOOT.ELF, dump do RPCS3 ou ferramenta local) para completar o requisito.";
         if(message.Contains("manifesto",StringComparison.OrdinalIgnoreCase)||message.Contains("integridade",StringComparison.OrdinalIgnoreCase)||message.Contains("corrompido",StringComparison.OrdinalIgnoreCase))return "Não foi possível validar a instalação. Tente reparar usando a mesma origem.";
         if(message.Contains("espaço insuficiente",StringComparison.OrdinalIgnoreCase))return "Não há espaço livre suficiente no destino escolhido.";
         if(message.Contains("ausente",StringComparison.OrdinalIgnoreCase)||message.Contains("não encontrado",StringComparison.OrdinalIgnoreCase))return "Faltam arquivos necessários. Confira a origem escolhida e tente reparar a instalação.";
@@ -427,6 +439,7 @@ public sealed class MainWindow : Window
     }
     void Refresh()
     {
+        UpdatePrepChecklist();
         play.IsEnabled=saves.IsEnabled=diagnostics.IsEnabled=false;
         import.IsEnabled=cancellation==null&&!preferences.UseExistingInstallation;
         if(useExisting is not null)useExisting.IsEnabled=cancellation==null;
@@ -502,7 +515,184 @@ public sealed class MainWindow : Window
         }
         catch(Exception e){Error(e);}
     }
-    async void SelectIso(){try{var d=new OpenFileDialog{Filter="Imagem ISO local|*.iso"};if(d.ShowDialog(this)!=true)return;detail.Text="Verificando se a imagem está montada pelo Windows…";source.Text=d.FileName;string? folder=await Discovery.MountedIso(d.FileName);if(folder!=null){source.Text=Installation.GameRoot(folder);detail.Text="Imagem compatível encontrada. A origem não será alterada.";}else detail.Text="Não foi possível acessar essa imagem. Monte-a no Explorador de Arquivos do Windows e escolha a unidade montada. O launcher não altera a imagem.";}catch(Exception e){Error(e);}}
+    async void SelectIso()
+    {
+        if(cancellation!=null)return;
+        try
+        {
+            var dialog=new OpenFileDialog{Filter="Imagem ISO local|*.iso"};
+            if(dialog.ShowDialog(this)!=true)return;
+            string isoPath=dialog.FileName;
+            // UI-affine values are captured on the UI thread; all IO and hashing
+            // run inside the Work task, and every UI write returns afterwards.
+            string destinationSelected=destination.Text,rememberedElf=preferences.EbootPath,rememberedRuntime=preferences.RuntimeExecutable;
+            string? resolvedGameRoot=null,stepDetail=null,foundElf=null,foundRuntime=null;
+            await Work("Preparação da ISO (montagem somente leitura e identificação)",async(_,ct)=>
+            {
+                var preparation=await IsoFlow.Prepare(isoPath,ct);
+                stepDetail=preparation.Detail;
+                if(preparation.GameRoot is not null)
+                {
+                    resolvedGameRoot=preparation.GameRoot;
+                    foundElf=IsoFlow.FindEbootElf(preparation.GameRoot,destinationSelected,rememberedElf,false);
+                    foundRuntime=IsoFlow.FindApprovedRuntime(destinationSelected,rememberedRuntime);
+                    stepDetail=preparation.Detail
+                        +(foundElf!=null?" EBOOT.ELF já preparado localizado e aprovado automaticamente.":" EBOOT.ELF preparado não encontrado ainda; gere-o com RPCS3/ferramenta local (instruções no assistente).")
+                        +(foundRuntime!=null?" Executável nativo aprovado localizado automaticamente.":" Executável nativo aprovado não localizado; informe o arquivo no assistente de preparação.");
+                }
+            });
+            lastIsoDetail=stepDetail??"";
+            if(resolvedGameRoot!=null)
+            {
+                preferences.UseExistingInstallation=false;
+                source.Text=resolvedGameRoot;
+                if(foundElf!=null&&!ApprovalMatchesState(elf.Text,rememberedElf))
+                {
+                    elf.Text=foundElf;
+                    MarkComponentApproval(foundElf,true);
+                }
+                if(foundRuntime!=null&&!ApprovalMatchesState(runtime.Text,rememberedRuntime))
+                {
+                    runtime.Text=foundRuntime;
+                    MarkComponentApproval(foundRuntime,true);
+                }
+                detail.Text=lastIsoDetail;
+            }
+            else detail.Text=lastIsoDetail+" Revise o assistente de preparação abaixo.";
+            Refresh();
+        }
+        catch(Exception e){Error(e);}
+    }
+    async void DecryptWithLocalTool()
+    {
+        if(cancellation!=null)return;
+        if(string.IsNullOrWhiteSpace(source.Text))
+        {
+            Error(new IOException("Selecione a ISO (SELECIONAR ISO LOCAL) para montar a imagem antes de usar a ferramenta local de descriptografia."));
+            return;
+        }
+        string gameRoot=source.Text;
+        var probe=IsoFlow.FindScetool();
+        if(probe.Path is null){Error(new IOException(probe.Detail));return;}
+        string outputDirectory=Path.Combine(Preferences.UserDataDirectory,"prep");
+        string? produced=null;
+        await Work("Descriptografia local do EBOOT.BIN com ferramenta do usuário",async(_,ct)=>
+        {
+            produced=await IsoFlow.ScetoolDecryptAsync(probe.Path,gameRoot,outputDirectory,ct);
+        });
+        if(produced is null)return;
+        elf.Text=produced;
+        MarkComponentApproval(produced,true);
+        detail.Text="EBOOT.ELF gerado pela ferramenta local e aprovado pela identidade do projeto. Ele permanece em "+produced+" e será copiado na preparação.";
+        Refresh();
+    }
+    bool ApprovalMatchesState(string current,string remembered) =>
+        (!string.IsNullOrWhiteSpace(current)&&FileExistsQuietForComponent(current))||
+        (!string.IsNullOrWhiteSpace(remembered)&&string.Equals(current,remembered,StringComparison.OrdinalIgnoreCase));
+    static bool FileExistsQuietForComponent(string path){try{return File.Exists(path);}catch(Exception){return false;}}
+    void MarkComponentApproval(string path,bool approved)
+    {
+        try
+        {
+            var info=new FileInfo(path);
+            componentIdentity[info.FullName]=(info.Length,info.LastWriteTimeUtc,approved);
+        }
+        catch(Exception){/* identity memo is best-effort only */}
+    }
+    bool? ApprovalStateForComponent(string path)
+    {
+        try
+        {
+            var info=new FileInfo(path);
+            if(info.Exists&&componentIdentity.TryGetValue(info.FullName,out var memo)&&
+                memo.Length==info.Length&&memo.WriteUtc==info.LastWriteTimeUtc)return memo.Approved;
+        }
+        catch(Exception){}
+        return null;
+    }
+    string OriginCheckLine(string path)
+    {
+        if(string.IsNullOrWhiteSpace(path))
+            return "✗ Origem: escolha a origem — SELECIONAR ISO LOCAL monta a imagem e preenche automaticamente; SELECIONAR PASTA aceita uma pasta PS3_GAME já extraída.";
+        try
+        {
+            string fromRoot=File.Exists(Path.Combine(path,"PARAM.SFO"))?path:Path.Combine(path,"PS3_GAME");
+            if(File.Exists(Path.Combine(fromRoot,"PARAM.SFO")))
+                return "✓ Origem: pasta PS3_GAME detectada em "+Installation.Full(fromRoot);
+        }
+        catch(Exception){}
+        return "✗ Origem: o caminho informado não contém uma pasta PS3_GAME legível.";
+    }
+    void UpdatePrepChecklist()
+    {
+        // Cheap, existence-only preview. The strict SHA-256 identity gate
+        // happens inside PREPARAR and the async REFRESH of compatibility; the
+        // checklist never claims an approval it did not actually perform.
+        var lines=new List<string>
+        {
+            string.IsNullOrWhiteSpace(lastIsoDetail)
+                ?"○ Imagem ISO: nenhuma selecionada (SELECIONAR ISO LOCAL monta a imagem em modo somente leitura e identifica a edição)."
+                :lastIsoDetail,
+            OriginCheckLine(source.Text)
+        };
+        string elfPath=elf.Text,runtimePath=runtime.Text,destinationPath=destination.Text;
+        if(string.IsNullOrWhiteSpace(elfPath))
+        {
+            var candidates=IsoFlow.EbootElfCandidates(OriginRootForChecklist(source.Text),destinationPath,preferences.EbootPath);
+            lines.Add(candidates.Count>0
+                ?"△ EBOOT.ELF: candidato localizado junto à origem/instalação; a identidade será conferida no PREPARAR."
+                :"✗ EBOOT.ELF: não localizado. Gere-o com o dump do RPCS3 ou use DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL); o launcher não descriptografa sozinho.");
+        }
+        else if(!FileExistsQuietForComponent(elfPath))
+            lines.Add("✗ EBOOT.ELF: o caminho informado não existe em disco.");
+        else
+        {
+            bool? approved=ApprovalStateForComponent(elfPath);
+            lines.Add(approved==true
+                ?"✓ EBOOT.ELF: identidade aprovada já conferida por este launcher."
+                :"△ EBOOT.ELF: arquivo informado; identidade exata (SHA-256 90eaa5e9…) será conferida no PREPARAR.");
+        }
+        if(string.IsNullOrWhiteSpace(runtimePath))
+        {
+            var candidates=IsoFlow.RuntimeCandidates(destinationPath,preferences.RuntimeExecutable);
+            lines.Add(candidates.Count>0
+                ?"△ Executável nativo: candidato possivelmente aprovado localizado (pacote/repositório/instalação) — confirmação por SHA-256 no PREPARAR."
+                :"✗ Executável nativo: nenhum des_boot.exe aprovado localizado. Informe a cópia aprovada (pasta Game do pacote ou arquivo salvo); o launcher não gera o executável a partir da ISO — o build de fonte exige o ambiente de desenvolvedor.");
+        }
+        else if(!FileExistsQuietForComponent(runtimePath))
+            lines.Add("✗ Executável nativo: o caminho informado não existe em disco.");
+        else
+        {
+            bool? approved=ApprovalStateForComponent(runtimePath);
+            lines.Add(approved==true
+                ?"✓ Executável nativo: identidade aprovada já conferida por este launcher."
+                :"△ Executável nativo: arquivo informado; identidade (SHA-256) será conferida no PREPARAR.");
+        }
+        if(!string.IsNullOrWhiteSpace(destinationPath))
+            lines.Add(Directory.Exists(destinationPath)
+                ?File.Exists(Path.Combine(destinationPath,"installation.json"))
+                    ?"✓ Destino: manifesto de instalação presente."
+                    :"○ Destino: pasta definida, sem manifesto (o PREPARAR grava o manifesto no final)."
+                :"○ Destino: pasta inexistente (o PREPARAR cria).");
+        try
+        {
+            string root=Path.GetPathRoot(Path.GetFullPath(destinationPath))??Path.GetPathRoot(Path.GetFullPath(source.Text))??"";
+            if(!string.IsNullOrWhiteSpace(root))
+            {
+                var drive=new DriveInfo(root);
+                if(drive.IsReady)
+                    lines.Add($"○ Espaço em {root}: {drive.AvailableFreeSpace:N0} bytes livres (prévia; a exigência exata é conferida na preparação).");
+            }
+        }
+        catch(Exception){}
+        prepChecklist.Text=string.Join(Environment.NewLine,lines);
+    }
+    string OriginRootForChecklist(string sourcePath)
+    {
+        if(string.IsNullOrWhiteSpace(sourcePath))return "";
+        try{return File.Exists(Path.Combine(sourcePath,"PARAM.SFO"))?sourcePath:Path.Combine(sourcePath,"PS3_GAME");}
+        catch(Exception){return "";}
+    }
     void Search(){candidates.Items.Clear();foreach(var c in Discovery.Common())candidates.Items.Add(c);candidates.Visibility=Visibility.Visible;detail.Text="Escolha um local encontrado. A versão será conferida antes da instalação.";}
     async void Install()
     {
@@ -515,7 +705,23 @@ public sealed class MainWindow : Window
         if(MessageBox.Show(this,$"Copiar/verificar os recursos de:\n{source.Text}\n\nPara:\n{destination.Text}\n\nA origem e os saves existentes serão preservados. Continuar?","Preparar instalação local",MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
         string s=source.Text,d=destination.Text,e=elf.Text,r=runtime.Text;
         await Work("Preparação ou reparo da instalação",async (p,ct)=>{await Installation.Import(s,d,e,r,p,ct);});
-        Refresh();if(play.IsEnabled){try{await SaveValidatedPreferences();}catch(Exception ex){Error(ex);}}
+        // After a verified import, point the component fields at the installed
+        // copies: identical hashes, so the identity gate re-approves them and
+        // future repairs/launches never depend on stray external paths.
+        string runtimeInstalled=Path.Combine(d,"runtime","des_boot.exe");
+        string elfInstalled=Path.Combine(d,"runtime","EBOOT.ELF");
+        if(File.Exists(runtimeInstalled))
+        {
+            runtime.Text=runtimeInstalled;
+            MarkComponentApproval(runtimeInstalled,true);
+        }
+        if(File.Exists(elfInstalled))
+        {
+            elf.Text=elfInstalled;
+            MarkComponentApproval(elfInstalled,true);
+        }
+        Refresh();_ = RefreshRuntimeCompatibility();
+        if(play.IsEnabled){try{await SaveValidatedPreferences();}catch(Exception ex){Error(ex);}}
     }
     async void Play()
     {
