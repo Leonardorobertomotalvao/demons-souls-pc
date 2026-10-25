@@ -59,7 +59,7 @@ public static class Program
                 using(var process=RuntimeService.Start(playRoot,savedPreferences,playVerification,isolated:true,
                           runtimeExecutable:string.IsNullOrWhiteSpace(selectedRuntime)?null:selectedRuntime))
                 {
-                    Console.WriteLine(JsonSerializer.Serialize(new {pid=process.Id,run=Directory.GetDirectories(Path.Combine(playRoot,"tests"),"run-*").Order().Last(),exe=string.IsNullOrWhiteSpace(selectedRuntime)?Path.Combine(playRoot,"runtime/des_boot.exe"):selectedRuntime,windowSettings=RuntimeService.VideoSettings(savedPreferences),verification=playVerification}));
+                    Console.WriteLine(JsonSerializer.Serialize(new {pid=process.Id,run=LatestRunDirectory(playRoot,savedPreferences.RuntimeProfile),exe=string.IsNullOrWhiteSpace(selectedRuntime)?Path.Combine(playRoot,"runtime/des_boot.exe"):selectedRuntime,windowSettings=RuntimeService.VideoSettings(savedPreferences),verification=playVerification}));
                 }break;
             case "--window-test":
             {
@@ -78,8 +78,9 @@ public static class Program
                 using var process=RuntimeService.Start(windowTestRoot,preferences,windowVerification,isolated:true,
                     runtimeExecutable:string.IsNullOrWhiteSpace(runtime)?null:runtime);
                 processStartTimer.Stop();
-                string run=Directory.GetDirectories(Path.Combine(windowTestRoot,"tests"),"run-*").Order().Last();
+                string run=LatestRunDirectory(windowTestRoot,preferences.RuntimeProfile);
                 string testLog=Path.Combine(run,"logs","window-test.jsonl");
+                Directory.CreateDirectory(Path.GetDirectoryName(testLog)!);
                 await File.AppendAllTextAsync(testLog,JsonSerializer.Serialize(new
                 {
                     eventName="started",pid=process.Id,exe=string.IsNullOrWhiteSpace(runtime)?Path.Combine(windowTestRoot,"runtime/des_boot.exe"):runtime,
@@ -118,7 +119,7 @@ public static class Program
                 string save=Get("--save","");using(var process=RuntimeService.Start(root,new Preferences(),smokeVerification,true,save.Length>0?save:null))
                 {
                     int seconds=int.Parse(Get("--seconds","110"));if(seconds<10||seconds>180)throw new ArgumentException("Smoke: 10–180 segundos.");
-                    string run=Directory.GetDirectories(Path.Combine(root,"tests"),"run-*").Order().Last();
+                    string run=LatestRunDirectory(root,new Preferences().RuntimeProfile);
                     try
                     {
                         for(int second=0;second<seconds;second+=2)
@@ -136,7 +137,21 @@ public static class Program
             case "--prepare-iso":
             {
                 string iso=Get("--iso"),prepareIsoDestination=Get("--destination");
-                var preparation=await IsoFlow.Prepare(iso,cancellation.Token);
+                if(!File.Exists(iso))
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new{iso=iso,mounted=false,drive=(string?)null,gameRoot=(string?)null,textBytes=(long?)null,detail="A ISO informada não existe em disco. Confira o caminho e repita; o launcher nunca altera a imagem."}));
+                    return 2;
+                }
+                IsoFlow.PreparedIso preparation;
+                try
+                {
+                    preparation=await IsoFlow.Prepare(iso,cancellation.Token);
+                }
+                catch(IOException e)
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new{iso=iso,mounted=false,drive=(string?)null,gameRoot=(string?)null,textBytes=(long?)null,detail=e.Message}));
+                    return 2;
+                }
                 Console.WriteLine(JsonSerializer.Serialize(new{
                     iso=preparation.IsoPath,mounted=preparation.DriveRoot!=null,drive=preparation.DriveRoot,
                     gameRoot=preparation.GameRoot,textBytes=preparation.ImageBytes,detail=preparation.Detail
@@ -199,6 +214,19 @@ public static class Program
             default:throw new ArgumentException("Comando desconhecido.");
         }
         return 0;
+    }
+    static string LatestRunDirectory(string root,string profile)
+    {
+        string[] candidates={Path.Combine(root,"tests"),Path.Combine(profile,"tests")};
+        foreach(string directory in candidates)
+        {
+            if(Directory.Exists(directory))
+            {
+                string? run=Directory.GetDirectories(directory,"run-*").Order().LastOrDefault();
+                if(run is not null)return run;
+            }
+        }
+        throw new DirectoryNotFoundException("O runtime não gravou a pasta de execução (tests/run-*); procurado em "+string.Join(" e em ",candidates)+". Confirme que o executável iniciou normalmente antes deste teste.");
     }
     sealed class DirectProgress(Action<Transfer> action):IProgress<Transfer>{public void Report(Transfer p)=>action(p);}
 }
