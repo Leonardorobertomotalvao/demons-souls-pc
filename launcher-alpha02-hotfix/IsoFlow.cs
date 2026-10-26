@@ -11,7 +11,7 @@ namespace DemonsSouls.Launcher;
 // ladder only *finds* user-side legitimate artifacts and checks identities).
 public static class IsoFlow
 {
-    public sealed record PreparedIso(string IsoPath,string? DriveRoot,string? GameRoot,long ImageBytes,string Detail);
+    public sealed record PreparedIso(string IsoPath,string? DriveRoot,string? GameRoot,long ImageBytes,string Detail,bool MountedByLauncher=false);
 
     static async Task<(string Output,string Errors,int ExitCode)> RunPowerShell(string script,string isoPath,int seconds,CancellationToken ct)
     {
@@ -66,6 +66,20 @@ public static class IsoFlow
         return VolumeWithPs3Game(output);
     }
 
+    // Ejects the image we mounted earlier. Used only from the launcher's own
+    // preparation flow at the end of an attempt (success, cancel or failure)
+    // because a running import keeps source files open until it returns; the
+    // wizard only calls this after the import task has fully finished. Never
+    // dismounts a volume the user mounted on their own.
+    public static async Task<bool> DismountIso(string isoPath,CancellationToken ct)
+    {
+        if(!FileExistsQuiet(isoPath))return false;
+        (string output,_,int code)=await RunPowerShell(
+            "$ErrorActionPreference='Stop'; Dismount-DiskImage -ImagePath $env:DS_SELECTED_ISO -ErrorAction Stop | Out-Null; Write-Output 'DISMOUNTED'",
+            isoPath,30,ct);
+        return code==0&&output.Contains("DISMOUNTED",StringComparison.Ordinal);
+    }
+
     // Full selection step: validate, mount when needed, resolve the PS3_GAME
     // root and describe the edition from PARAM.SFO without copying anything.
     public static async Task<PreparedIso> Prepare(string isoPath,CancellationToken ct=default)
@@ -79,7 +93,7 @@ public static class IsoFlow
         if(drive is null){mountAttempted=true;drive=await MountIso(isoPath,ct);}
         if(drive is null)
             return new(isoPath,null,null,imageBytes,
-                "O Windows não montou a imagem"+(mountAttempted?" automaticamente":"")+". Faça duplo clique no arquivo ISO no Explorador de Arquivos para montá-la como unidade virtual e repita a seleção; o launcher nunca altera a imagem.");
+                "O Windows não montou a imagem"+(mountAttempted?" automaticamente":"")+". Faça duplo clique no arquivo ISO no Explorador de Arquivos para montá-la como unidade virtual e repita a seleção; o launcher nunca altera a imagem.",false);
         string detail;string? gameRoot=null;
         try
         {
@@ -91,7 +105,22 @@ public static class IsoFlow
             gameRoot=null;
             detail="A imagem está montada em "+drive+", mas não contém a edição compatível: "+e.Message;
         }
-        return new(isoPath,drive,gameRoot,imageBytes,detail);
+        return new(isoPath,drive,gameRoot,imageBytes,detail,mountAttempted);
+    }
+
+    // Only the North-American edition 01.00 carries the approved SHA-256
+    // identities the launcher accepts; reject anything else before copying a
+    // single file so mistakes surface immediately.
+    public const string SupportedTitleId="BLUS30443";
+    public static void CheckSupportedEdition(string gameRoot)
+    {
+        var sfo=Installation.Sfo(Path.Combine(gameRoot,"PARAM.SFO"));
+        string edition=sfo.GetValueOrDefault("TITLE_ID")??"";
+        string version=sfo.GetValueOrDefault("APP_VER")??"";
+        if(!edition.Equals(SupportedTitleId,StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"A imagem contém o Title ID {edition}, mas o launcher aceita somente a edição {SupportedTitleId} (norte-americana, versão 1.00). A imagem não foi alterada e nada foi copiado.");
+        if(!version.TrimStart('0').StartsWith("1.",StringComparison.Ordinal))
+            throw new IOException($"A edição {edition} é compatível, mas a versão informada pelo PARAM.SFO é {version}; o launcher valida a versão 01.00. A imagem não foi alterada e nada foi copiado.");
     }
 
     public static string Describe(string gameRoot,long imageBytes)
@@ -210,13 +239,61 @@ public static class IsoFlow
     }
 
     // scetool (GPL) is the project-documented local, user-installed option B
-    // in docs/03-setup.md; the launcher detects it, never bundles it.
-    public static ToolProbe FindScetool()
+    // in docs/03-setup.md; the launcher detects it, never bundles it. A
+    // user-configured tool path (Preferences.ScetoolPath) wins when the file
+    // really exists, so custom install locations are honored without
+    // guessing; a broken configured path is refused instead of silently
+    // replaced by an auto-detected copy.
+    public static ToolProbe FindScetool(string? preferred=null)
     {
+        if(!string.IsNullOrWhiteSpace(preferred))
+        {
+            if(FileExistsQuiet(preferred))
+                return new(preferred,"Ferramenta local de descriptografia configurada pelo usuário: "+preferred);
+            return new(null,"A ferramenta local configurada não existe em disco: "+preferred+". Nenhuma outra ferramenta compatível foi localizada e o launcher não descriptografa por conta própria; use o botão FERRAMENTA PARA EBOOT.BIN para reconfigurar ou o dump de executável do RPCS3 (docs/03-setup.md §3).");
+        }
         foreach(string candidate in ScetoolCandidates())
             if(FileExistsQuiet(candidate))
                 return new(candidate,"Ferramenta local de descriptografia detectada (instalada pelo usuário; licença GPL): "+candidate);
-        return new(null,"Nenhuma ferramenta local de descriptografia compatível foi localizada. O launcher não descriptografa arquivos por conta própria. Para gerar o EBOOT.ELF preparado, use o dump de executável do RPCS3 (rota recomendada em docs/03-setup.md §3) ou instale o scetool localmente com as chaves públicas da sua cópia e repita este passo.");
+        return new(null,"Nenhuma ferramenta local de descriptografia compatível foi localizada. O launcher não descriptografa arquivos por conta própria. Para gerar o EBOOT.ELF preparado, use o botão FERRAMENTA PARA EBOOT.BIN para apontar sua cópia do scetool (rota B de docs/03-setup.md §3) ou o dump de executável do RPCS3 (rota A).");
+    }
+
+    // Runs the selected tool with NO arguments — the project never invents
+    // tool parameters (scetool's own launched usage text is what a
+    // documentation-respecting probe can rely on). This only answers "does
+    // the executable start and respond within a short window"; the decrypt
+    // invocation itself remains exactly as documented for the tool.
+    public static async Task<(bool Started,string Detail)> ProbeToolRespondsAsync(string toolPath,CancellationToken ct)
+    {
+        try
+        {
+            var start=new ProcessStartInfo(toolPath)
+            {
+                UseShellExecute=false,CreateNoWindow=true,
+                RedirectStandardOutput=true,RedirectStandardError=true,
+                WorkingDirectory=Path.GetDirectoryName(toolPath)??"."
+            };
+            using var process=Process.Start(start)!;
+            Task<string> stdout=process.StandardOutput.ReadToEndAsync(),stderr=process.StandardError.ReadToEndAsync();
+            using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(8));
+            int code;
+            try{await process.WaitForExitAsync(timeout.Token);code=process.ExitCode;}
+            catch(OperationCanceledException)
+            {
+                try{process.Kill();}catch(Exception){/* may have exited first */}
+                if(ct.IsCancellationRequested)throw new OperationCanceledException(ct);
+                return (false,"O teste de resposta da ferramenta excedeu 8 segundos e o processo foi encerrado: "+toolPath);
+            }
+            string text=(await stderr+" "+await stdout).Trim();
+            bool started=code!=0||text.Length>0;
+            OperationTrace.Observe("local_tool_probe_"+(started?"responds":"no_output"));
+            return (started,"processo executado, código "+code+(text.Length>0?" · saída da ferramenta: "+text[..Math.Min(240,text.Length)]:""));
+        }
+        catch(Exception e)
+        {
+            return (false,"a ferramenta não pôde ser iniciada ("+e.GetBaseException().Message+"): "+toolPath);
+        }
     }
 
     // Runs the user-provided local tool to decrypt (no keys of ours, no crypto
@@ -227,6 +304,7 @@ public static class IsoFlow
     {
         string bin=Path.Combine(gameRoot,"USRDIR","EBOOT.BIN");
         if(!FileExistsQuiet(bin))throw new IOException("EBOOT.BIN de origem ausente: "+bin+". Use SELECIONAR ISO para montar a imagem primeiro.");
+        long binBytes=0;try{binBytes=new FileInfo(bin).Length;}catch(Exception){/* evidence only */}
         Directory.CreateDirectory(outputDirectory);
         string output=Path.Combine(outputDirectory,"EBOOT.ELF");
         try{File.Delete(output);}catch(IOException e){throw new IOException("Não foi possível limpar o ELF temporário anterior: "+e.Message);}
@@ -251,15 +329,36 @@ public static class IsoFlow
         }
         string errors=await stderr,text=await stdout;
         if(code!=0||!FileExistsQuiet(output))
-            throw new IOException("A ferramenta local de descriptografia falhou (código "+code+"): "+string.Join(" ",errors,text).Trim());
-        try{Installation.CheckElf(output);}
+            throw new IOException("A ferramenta local de descriptografia falhou (código "+code+") e o EBOOT.BIN original permanece intacto: "+string.Join(" ",errors,text).Trim());
+        try{ValidateDecryptedEboot(output,binBytes);}
+        catch(IOException){throw;}
+        return output;
+    }
+
+    // Post-decryption gate, separable for tests: real non-empty output, strict
+    // ELF identity (PPC64 big-endian header + pinned SHA-256) and recorded
+    // evidence (size + SHA-256 + verdict). A produced file is never approved
+    // merely because it exists; the EBOOT.BIN source is never overwritten.
+    internal static void ValidateDecryptedEboot(string outputPath,long sourceBinBytes)
+    {
+        OperationTrace.Observe("eboot_bin_source_bytes_"+sourceBinBytes);
+        var info=new FileInfo(outputPath);
+        if(!info.Exists||info.Length==0)
+            throw new IOException($"A ferramenta local não produziu o ELF em {outputPath} (arquivo ausente ou vazio). O EBOOT.BIN original não foi alterado.");
+        string sha;
+        try{sha=Sha256Hex(outputPath).ToLowerInvariant();}catch(Exception){sha="indisponível";}
+        OperationTrace.Observe("eboot_elf_produced_bytes_"+info.Length);
+        OperationTrace.Observe("eboot_elf_sha256_"+sha);
+        try
+        {
+            Installation.CheckElf(outputPath);
+            OperationTrace.Observe("eboot_elf_validated_by_identity");
+        }
         catch(Exception e)
         {
-            string sha;
-            try{sha=Sha256Hex(output).ToLowerInvariant();}catch(Exception){sha="indisponível";}
-            throw new IOException($"A descriptografia local concluiu, mas o resultado não tem a identidade exata aprovada pelo projeto (esperado 90eaa5e9…, obtido {sha[..Math.Min(16,sha.Length)]}). O arquivo foi mantido em {output} para revisão manual. Detalhe: {e.Message}");
+            OperationTrace.Observe("eboot_elf_rejected_by_identity");
+            throw new IOException($"A ferramenta local concluiu, mas o resultado não tem a identidade exata aprovada pelo projeto (esperado {RuntimeService.ApprovedElfSha256[..16]}…, obtido {sha[..Math.Min(16,sha.Length)]}, {info.Length:N0} bytes). O arquivo foi mantido em {outputPath} para revisão manual e o EBOOT.BIN original permanece intacto. Detalhe: {e.Message}");
         }
-        return output;
     }
 
     static string GetFullPath(string path)

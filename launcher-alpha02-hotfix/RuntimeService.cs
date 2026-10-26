@@ -14,6 +14,7 @@ public sealed class Preferences
     public string RuntimeProfile { get; set; } = Path.Combine(UserDataDirectory,"Alpha02-experimental-profile");
     public string RuntimeExecutable { get; set; } = "";
     public string EbootPath { get; set; } = "";
+    public string ScetoolPath { get; set; } = "";
     public string MonitorDevice { get; set; } = "";
     public bool KeyboardMouse { get; set; } = true;
     public bool Vsync { get; set; } = true;

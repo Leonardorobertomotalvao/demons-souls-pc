@@ -33,6 +33,7 @@ Copy-Item -Path (Join-Path $tempBuild "*") -Destination $launcherDir -Recurse
 Write-Host "• documentação do pacote…"
 Copy-Item README.md -Destination $staging -Force
 Copy-Item docs\03-setup.md -Destination (New-Item -ItemType Directory -Force -Path (Join-Path $staging "docs")).FullName -Force
+Write-Host "• README-PT-EN.txt (instruções bilíngues dentro do pacote)…"
 
 # aprovado: do arquivo do usuário ou de onde o mantenedor indicar (nunca do repositório)
 $runtimeNote = "Executável nativo não incluído (política: só entra no pacote uma cópia com identidade aprovada confirmada aqui)."
@@ -55,8 +56,31 @@ Write-Host $runtimeNote
 $releaseInfo = (Get-Item (Join-Path $tempBuild "DemonsSouls.Launcher.exe")).VersionInfo
 $version = ($releaseInfo.ProductVersion -split '\+')[0]
 foreach ($pattern in @("*.iso","*.elf","*.self","*.bin","*.BIN","*.pkg","*.rap","*_keys*")) { Remove-Item (Join-Path $staging $pattern) -ErrorAction SilentlyContinue }
-$zip = Join-Path $StagingRoot "DemonSoulsPC-Launcher-Windows-x64-$version.zip"
+
+# Identidade compilada para o README-PT-EN.txt do pacote (autodescritivo);
+# o SHA do .zip vive APENAS no SHA256.txt anexado à Release (não no zip:
+# hashes recursivos são impossíveis).
+$exeSha = (Get-FileHash -Algorithm SHA256 (Join-Path $tempBuild "DemonsSouls.Launcher.exe")).Hash.ToLower()
+$commitSha = (git rev-parse HEAD).Trim()
+if (Test-Path "scripts\release\README-PT-EN.txt") {
+    $noteText = Get-Content "scripts\release\README-PT-EN.txt" -Raw
+    $noteText = $noteText.Replace("{VERSION}", $version)
+    $noteText = $noteText.Replace("{TAG}", "v$version")
+    $noteText = $noteText.Replace("{EXESHA}", $exeSha.ToUpper())
+    $noteText = $noteText.Replace("{COMMIT}", $commitSha)
+    $noteText | Set-Content -LiteralPath (Join-Path $staging "README-PT-EN.txt") -Encoding UTF8
+}
+
+# Nome com prefixo 'v', alinhado ao padrão das Releases (ex.: v0.2.1-alpha.1)
+$zip = Join-Path $StagingRoot "DemonSoulsPC-Launcher-Windows-x64-v$version.zip"
 Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zip -Force
 $zipSha = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+
+# SHA256.txt (asset externo da Release): zip + exe + commit + versão
+$shaTxt = Join-Path $StagingRoot "DemonSoulsPC-Launcher-Windows-x64-SHA256.txt"
+$shaText = "SHA256 (zip): $zipSha`nSHA256 (Launcher\DemonsSouls.Launcher.exe): $exeSha`nCommit da fonte: $commitSha`nVersão: $version"
+[IO.File]::WriteAllText($shaTxt, $shaText, [Text.Encoding]::UTF8)
+
 Write-Host "PACOTE OK: $zip ($zipSha)"
 Write-Host "Versão: $($releaseInfo.ProductVersion) | Launcher dir: $launcherDir"
+Write-Host "SHA256.txt: $shaTxt"

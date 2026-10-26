@@ -17,6 +17,7 @@ public sealed class MainWindow : Window
     readonly TextBlock prepChecklist=new(){TextWrapping=TextWrapping.Wrap,Foreground=new SolidColorBrush(Color.FromRgb(224,199,137)),Margin=new(0,4,0,2)};
     readonly Dictionary<string,(long Length,DateTime WriteUtc,bool Approved)> componentIdentity=new(StringComparer.OrdinalIgnoreCase);
     string lastIsoDetail="";
+    readonly List<string> wizardAdvice=new();
     readonly ProgressBar bar=new()
     {
         Height=8,Minimum=0,Maximum=100,
@@ -30,7 +31,7 @@ public sealed class MainWindow : Window
     readonly TextBlock frameRateStatus=new(){TextWrapping=TextWrapping.Wrap,Foreground=new SolidColorBrush(Color.FromRgb(224,199,137))};
     readonly ListBox candidates=new(){MaxHeight=150,Visibility=Visibility.Collapsed};
     readonly TabControl tabs=new(){Background=new SolidColorBrush(Color.FromRgb(30,38,46)),Foreground=Brushes.WhiteSmoke,Padding=new(10)};
-    readonly Button play, import, cancel, saves, diagnostics;
+    readonly Button play, import, cancel, saves, diagnostics, prepareIso;
     Button? useExisting;
     Grid? headerLayout, settingsLayout;
     StackPanel? identityPanel, playPanel;
@@ -194,14 +195,18 @@ public sealed class MainWindow : Window
         setup.Children.Add(Button("Escolher pasta de instalação",()=>ChooseFolder(destination)));
         setup.Children.Add(new TextBlock{Text="3. Prepare ou repare a instalação",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,14,0,4)});
         var operations=new WrapPanel();
+        prepareIso=Button("PREPARAR ISO",PrepareIsoWizard);
+        prepareIso.FontSize=17;prepareIso.MinWidth=182;prepareIso.MinHeight=48;prepareIso.FontWeight=FontWeights.SemiBold;prepareIso.Background=new SolidColorBrush(Color.FromRgb(146,113,58));
         import=Button("PREPARAR / REPARAR",Install); cancel=Button("Cancelar",()=>cancellation?.Cancel()); cancel.IsEnabled=false;
-        operations.Children.Add(import); operations.Children.Add(cancel); setup.Children.Add(operations);
+        operations.Children.Add(prepareIso); operations.Children.Add(import); operations.Children.Add(cancel); setup.Children.Add(operations);
+        setup.Children.Add(new TextBlock{Text="PREPARAR ISO executa o fluxo automático completo: seleciona a imagem, monta somente leitura, identifica a edição BLUS30443 · 01.00, localiza os componentes locais aprovados (EBOOT.ELF e runtime), prepara ou repara a instalação no destino configurado com verificação SHA-256 e desmonta a imagem ao terminar — inclusive em cancelamento ou erro.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,8,0,0)});
         setup.Children.Add(new TextBlock{Text="Assistente de preparação a partir da ISO",FontSize=16,FontWeight=FontWeights.SemiBold,Margin=new(0,10,0,2)});
         setup.Children.Add(prepChecklist);
         var componentShortcuts=new WrapPanel();
         componentShortcuts.Children.Add(Button("SELECIONAR EBOOT.ELF",()=>ChooseFile(elf,"ELF preparado|*.elf")));
         componentShortcuts.Children.Add(Button("SELECIONAR EXECUTÁVEL NATIVO",()=>ChooseFile(runtime,"Executável nativo|*.exe")));
-        componentShortcuts.Children.Add(Button("DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL)",DecryptWithLocalTool));
+        componentShortcuts.Children.Add(Button("PREPARAR EBOOT.BIN",PrepareEbootBin));
+        componentShortcuts.Children.Add(Button("FERRAMENTA PARA EBOOT.BIN",SelectLocalDecryptTool));
         setup.Children.Add(componentShortcuts);
         setup.Children.Add(new TextBlock{Text="O assistente localiza automaticamente componentes já preparados (junto à imagem montada, no destino informado ou lembrados nas configurações) e confere a identidade SHA-256 antes de habilitar JOGAR. O launcher não descriptografa a EBOOT.BIN protegida sozinho: gere o EBOOT.ELF com o dump de executável do RPCS3 (docs/03-setup.md) ou com uma ferramenta local instalada por você. A imagem e a origem nunca são alteradas.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,4,0,8)});
         setup.Children.Add(new TextBlock{Text="PREPARAR / REPARAR atua somente em cópias locais gerenciadas pelo launcher; fica desativado no modo de instalação existente.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightGray,Margin=new(0,4,0,8)});
@@ -442,6 +447,7 @@ public sealed class MainWindow : Window
         UpdatePrepChecklist();
         play.IsEnabled=saves.IsEnabled=diagnostics.IsEnabled=false;
         import.IsEnabled=cancellation==null&&!preferences.UseExistingInstallation;
+        if(prepareIso is not null)prepareIso.IsEnabled=cancellation==null;
         if(useExisting is not null)useExisting.IsEnabled=cancellation==null;
         if(!File.Exists(Path.Combine(destination.Text,"installation.json")))
         {
@@ -563,29 +569,328 @@ public sealed class MainWindow : Window
         }
         catch(Exception e){Error(e);}
     }
-    async void DecryptWithLocalTool()
+    async void PrepareIsoWizard()
     {
         if(cancellation!=null)return;
-        if(string.IsNullOrWhiteSpace(source.Text))
+        try
         {
-            Error(new IOException("Selecione a ISO (SELECIONAR ISO LOCAL) para montar a imagem antes de usar a ferramenta local de descriptografia."));
-            return;
+            var dialog=new OpenFileDialog{Title="Selecione a ISO do Demon's Souls",Filter="Imagem ISO local|*.iso"};
+            if(dialog.ShowDialog(this)!=true)return;
+            await PrepareIsoWizardCore(dialog.FileName);
         }
-        string gameRoot=source.Text;
-        var probe=IsoFlow.FindScetool();
-        if(probe.Path is null){Error(new IOException(probe.Detail));return;}
-        string outputDirectory=Path.Combine(Preferences.UserDataDirectory,"prep");
-        string? produced=null;
-        await Work("Descriptografia local do EBOOT.BIN com ferramenta do usuário",async(_,ct)=>
-        {
-            produced=await IsoFlow.ScetoolDecryptAsync(probe.Path,gameRoot,outputDirectory,ct);
-        });
-        if(produced is null)return;
-        elf.Text=produced;
-        MarkComponentApproval(produced,true);
-        detail.Text="EBOOT.ELF gerado pela ferramenta local e aprovado pela identidade do projeto. Ele permanece em "+produced+" e será copiado na preparação.";
-        Refresh();
+        catch(Exception e){Error(e);}
     }
+    // Complete automatic flow behind PREPARAR ISO: selection → read-only mount
+    // → edition validation → local component discovery → managed import with
+    // resume/repair → settings synchronization → safe dismount even on
+    // cancel/failure. Reuses the CLI-proven pipeline (IsoFlow + Installation).
+    internal async Task<bool> PrepareIsoWizardCore(string isoPath)
+    {
+        if(cancellation!=null)return false;
+        string destinationUsed=destination.Text;
+        if(string.IsNullOrWhiteSpace(destinationUsed))
+        {
+            destinationUsed=Path.Combine(Preferences.UserDataDirectory,"GameData");
+            destination.Text=destinationUsed;
+        }
+        string rememberedElf=preferences.EbootPath,rememberedRuntime=preferences.RuntimeExecutable;
+        bool mountedByUs=false,keepMountForLocalTool=false,dismounted=false,initiallyMounted=false;
+        wizardAdvice.Clear();UpdatePrepChecklist();
+        bool ok=await Work("PREPARAR ISO — assistente automático a partir da imagem",async(p,ct)=>
+        {
+            try
+            {
+                p.Report(new("Montando a ISO em modo somente leitura e identificando a edição","",0,0,0,0,0));
+                SetWizardStatus("ISO: montando e identificando a edição…");
+                initiallyMounted=(await IsoFlow.MountedVolume(isoPath,CancellationToken.None)) is not null;
+                var preparation=await IsoFlow.Prepare(isoPath,ct);
+                mountedByUs=preparation.MountedByLauncher;
+                SetWizardStatus("ISO: "+preparation.Detail);
+                if(preparation.GameRoot is null)
+                    throw new IOException("PREPARAR ISO não pôde continuar: "+preparation.Detail);
+                string gameRoot=preparation.GameRoot;
+                p.Report(new("Validando a edição compatível (BLUS30443 · versão 01.00)","",0,0,0,0,0));
+                IsoFlow.CheckSupportedEdition(gameRoot);
+                SetWizardStatus("Jogo identificado: BLUS30443 · versão 01.00. Conferindo PS3_GAME e recursos…");
+                if(!Directory.Exists(Path.Combine(gameRoot,"USRDIR")))
+                    throw new IOException("A PS3_GAME montada está incompleta (pasta USRDIR ausente em "+gameRoot+"). A imagem não foi alterada.");
+                p.Report(new("Localizando componentes locais aprovados (EBOOT.ELF e runtime)","",0,0,0,0,0));
+                string? foundElf=IsoFlow.FindEbootElf(gameRoot,destinationUsed,rememberedElf,false);
+                string? foundRuntime=IsoFlow.FindApprovedRuntime(destinationUsed,rememberedRuntime);
+                if(foundElf is null||foundRuntime is null)
+                {
+                    var probe=IsoFlow.FindScetool(preferences.ScetoolPath);
+                    keepMountForLocalTool=foundElf is null&&probe.Path is not null;
+                    if(keepMountForLocalTool)SetSourceFromWork(gameRoot);
+                    AddWizardAdvice(keepMountForLocalTool
+                        ?"Imagem mantida montada em "+preparation.DriveRoot+" para permitir PREPARAR EBOOT.BIN (FERRAMENTA LOCAL); o caminho da PS3_GAME também foi preenchido para esse fluxo."
+                        :"Imagem desmontada ao fim deste aviso; nenhuma etapa pendente depende dela.");
+                    throw new IOException(MissingComponentsReport(foundElf,foundRuntime,destinationUsed));
+                }
+                SetWizardStatus("Componentes aprovados localizados. Preparando/reparando a instalação em "+destinationUsed+" (SHA-256 com retomada)…");
+                p.Report(new("Preparando ou reparando a instalação (verificação integral SHA-256)","",0,0,0,0,0));
+                await Installation.Import(
+                    gameRoot,
+                    destinationUsed,
+                    foundElf,
+                    foundRuntime,
+                    p,
+                    ct,
+                    sourceImage: isoPath
+                );
+                var manifest=Installation.Load(destinationUsed);
+                if(!manifest.Complete)
+                    throw new IOException("A preparação terminou com a instalação incompleta. Repita PREPARAR ISO com a mesma ISO e o mesmo destino para retomar exatamente de onde parou.");
+                SetWizardStatus("PREPARAR ISO concluído: instalação íntegra em "+destinationUsed+". Desmontando a imagem…");
+            }
+            finally
+            {
+                // Ownership test, not bookkeeping alone: whatever got mounted
+                // only because of this attempt is removed — including the
+                // window where a cancellation raced an in-flight mount.
+                bool mountedNow=false;
+                try{mountedNow=(await IsoFlow.MountedVolume(isoPath,CancellationToken.None)) is not null;}
+                catch(Exception){mountedNow=mountedByUs;}
+                if(!initiallyMounted&&mountedNow&&!keepMountForLocalTool)
+                {
+                    try{dismounted=await IsoFlow.DismountIso(isoPath,CancellationToken.None);}
+                    catch(Exception){OperationTrace.Observe("iso_dismount_failed");}
+                    SetWizardStatus(dismounted?"Imagem desmontada com segurança.":"A imagem permaneceu montada; desmonte pelo Explorador de Arquivos quando desejar.");
+                }
+            }
+        });
+        if(ok)
+        {
+            string elfInstalled=Path.Combine(destinationUsed,"runtime","EBOOT.ELF");
+            string runtimeInstalled=Path.Combine(destinationUsed,"runtime","des_boot.exe");
+            if(File.Exists(runtimeInstalled)){runtime.Text=runtimeInstalled;MarkComponentApproval(runtimeInstalled,true);}
+            if(File.Exists(elfInstalled)){elf.Text=elfInstalled;MarkComponentApproval(elfInstalled,true);}
+            destination.Text=destinationUsed;
+            preferences.UseExistingInstallation=false;
+            if(!Directory.Exists(runtimeProfile.Text))
+            {
+                string defaultProfile=Path.Combine(Preferences.UserDataDirectory,"Alpha02-experimental-profile");
+                AddWizardAdvice("Perfil experimental redefinido para o padrão ("+defaultProfile+"): o caminho configurado não existia, portanto não havia saves ou dados naquele local.");
+                runtimeProfile.Text=defaultProfile;
+            }
+            wizardAdvice.Add(dismounted
+                ?"Imagem ISO desmontada automaticamente ao término."
+                :mountedByUs?"A imagem permaneceu montada para a ferramenta local pendente; desmonte pelo Explorador quando concluir."
+                :"A imagem já estava montada pelo usuário; o launcher não a removeu.");
+            UpdatePrepChecklist();
+            detail.Text="PREPARAR ISO concluída: instalação verificada e íntegra em "+destinationUsed+".";
+            Refresh();await RefreshRuntimeCompatibility();
+            try{await SaveValidatedPreferences();}
+            catch(Exception ex){Error(ex);}
+        }
+        return ok;
+    }
+    // Per-component guidance: what is missing, what it is for, where to get it
+    // and which exact button solves it. The ISO alone never produces these.
+    static string MissingComponentsReport(string? foundElf,string? foundRuntime,string destinationUsed)
+    {
+        var lines=new List<string>{"PREPARAR ISO parou: um componente local obrigatório está ausente. A ISO sozinha não fornece o executável nativo nem o ELF preparado."};
+        if(foundElf is null)
+            lines.Add("· EBOOT.ELF preparado — executável do jogo já convertido, exigido pelo runtime e pelo recompilador. Como obter: dump de executável do RPCS3 (docs/03-setup.md §3) ou o botão PREPARAR EBOOT.BIN com sua ferramenta local (scetool + chaves próprias); depois confirme no botão SELECIONAR EBOOT.ELF.");
+        if(foundRuntime is null)
+            lines.Add("· des_boot.exe aprovado — executável nativo que inicia o jogo no PC. Como obter: copie da pasta Game/ do pacote Alpha 02-60FPS (Release) ou confirme sua cópia anterior no botão SELECIONAR EXECUTÁVEL NATIVO; a ISO não contém este arquivo e o launcher não compila uma cópia nova.");
+        lines.Add("Nada foi copiado para o destino "+destinationUsed+" nesta tentativa; a origem permanece intacta.");
+        return string.Join(Environment.NewLine,lines);
+    }
+    void SetWizardStatus(string text)=>_=Dispatcher.BeginInvoke(()=>{lastIsoDetail=text;UpdatePrepChecklist();});
+    void AddWizardAdvice(string line)=>_=Dispatcher.BeginInvoke(()=>{wizardAdvice.Add(line);UpdatePrepChecklist();});
+    async void PrepareEbootBin()
+    {
+        if(cancellation!=null)return;
+        try
+        {
+            string? isoPath=null;
+            if(string.IsNullOrWhiteSpace(source.Text))
+            {
+                var dialog=new OpenFileDialog{Title="PREPARAR EBOOT.BIN — selecione a ISO do Demon's Souls",Filter="Imagem ISO local|*.iso"};
+                bool picked=dialog.ShowDialog(this)==true;
+                if(!picked)return;
+                isoPath=dialog.FileName;
+            }
+            OperationTrace.Observe("eboot_stage_resolving_tool");
+            string? tool=ResolveLocalDecryptTool();
+            if(tool is null)return; // the refusal was already reported honestly
+            OperationTrace.Observe("eboot_stage_core_starting");
+            await PrepareEbootBinCore(isoPath,tool);
+        }
+        catch(Exception e){Error(e);}
+    }
+    // Resolves the local decryption tool: the user-configured path first
+    // (Preferences.ScetoolPath), then common auto-detection; without any of
+    // them, offers a file dialog. Keys stay inside the user's own tool
+    // configuration — the launcher never supplies, extracts or distributes
+    // them (docs/03-setup.md §3).
+    string? ResolveLocalDecryptTool()
+    {
+        var probe=IsoFlow.FindScetool(preferences.ScetoolPath);
+        if(probe.Path is not null)return probe.Path;
+        var dialog=new OpenFileDialog{Title="PREPARAR EBOOT.BIN — selecione a ferramenta local de descriptografia",Filter="scetool (documentado no projeto)|scetool.exe|Ferramenta local de descriptografia|*.exe"};
+        if(dialog.ShowDialog(this)!=true)
+        {
+            Error(new IOException(probe.Detail+" Nenhuma ferramenta foi selecionada; a descriptografia do EBOOT.BIN não foi executada."));
+            return null;
+        }
+        preferences.ScetoolPath=Installation.Full(dialog.FileName);
+        try{preferences.Write();}
+        catch(Exception e){Error(e);return null;}
+        var confirmed=IsoFlow.FindScetool(preferences.ScetoolPath);
+        if(confirmed.Path is null){Error(new IOException(confirmed.Detail));return null;}
+        detail.Text="Ferramenta local configurada: "+confirmed.Path+" "+LocalDecryptToolGuidance();
+        return confirmed.Path;
+    }
+    void SelectLocalDecryptTool()
+    {
+        try
+        {
+            var dialog=new OpenFileDialog{Title="FERRAMENTA PARA EBOOT.BIN — selecione scetool.exe ou ferramenta compatível",Filter="scetool (documentado no projeto)|scetool.exe|Ferramenta local de descriptografia|*.exe"};
+            if(dialog.ShowDialog(this)!=true)return;
+            preferences.ScetoolPath=Installation.Full(dialog.FileName);
+            try{preferences.Write();}
+            catch(Exception e){Error(e);return;}
+            var confirmed=IsoFlow.FindScetool(preferences.ScetoolPath);
+            detail.Text=confirmed.Path is not null
+                ?"Ferramenta local configurada: "+confirmed.Path+" "+LocalDecryptToolGuidance()
+                :confirmed.Detail;
+            Refresh();
+        }
+        catch(Exception e){Error(e);}
+    }
+    static string LocalDecryptToolGuidance() =>
+        "A descriptografia legítima exige um arquivo de chaves configurado na própria ferramenta (docs/03-setup.md §3). O launcher não fornece, extrai nem distribui chaves nem firmware: instale a cópia da ferramenta e das chaves que você tem direito de usar. O ELF produzido só entra na instalação se corresponder à identidade exata aprovada do projeto (tamanho e SHA-256 registrados no diagnóstico), e o EBOOT.BIN original é preservado integralmente.";
+    // PREPARAR EBOOT.BIN core: identifies the source (mounting the read-only
+    // ISO when needed), verifies the tool responds without invented
+    // parameters, runs the documented decrypt, validates the produced ELF
+    // against the pinned identity and CONTINUES the PREPARAR ISO pipeline
+    // (runtime discovery → managed import) when the ELF is approved. A
+    // missing native executable is reported SEPARATELY; decrypting the EBOOT
+    // is never confused with building des_boot.exe.
+    internal async Task<bool> PrepareEbootBinCore(string? isoPathIfSourceEmpty,string tool)
+    {
+        if(cancellation!=null)return false;
+        string? isoPathUsed=isoPathIfSourceEmpty;
+        string? existingRoot=string.IsNullOrWhiteSpace(isoPathIfSourceEmpty)?source.Text:null;
+        if(string.IsNullOrWhiteSpace(isoPathUsed)&&string.IsNullOrWhiteSpace(existingRoot))
+        {
+            Error(new IOException("PREPARAR EBOOT.BIN precisa de uma origem: selecione a ISO (a imagem será montada e identificada) ou uma pasta PS3_GAME que contém USRDIR/EBOOT.BIN."));
+            return false;
+        }
+        string destinationUsed=destination.Text;
+        if(string.IsNullOrWhiteSpace(destinationUsed))
+        {
+            destinationUsed=Path.Combine(Preferences.UserDataDirectory,"GameData");
+            destination.Text=destinationUsed;
+        }
+        bool mountedByUs=false,dismounted=false,runtimeMissing=false,initiallyMounted=false;
+        string? producedElf=null;
+        wizardAdvice.Clear();UpdatePrepChecklist();
+        bool ok=await Work("PREPARAR EBOOT.BIN — descriptografia legítima com a ferramenta local",async(p,ct)=>
+        {
+            try
+            {
+                string gameRoot;
+                if(existingRoot is null)
+                {
+                    p.Report(new("Montando a ISO em modo somente leitura e identificando a edição","",0,0,0,0,0));
+                    SetWizardStatus("PREPARAR EBOOT.BIN: montando e identificando a ISO…");
+                    initiallyMounted=(await IsoFlow.MountedVolume(isoPathUsed!,CancellationToken.None)) is not null;
+                    var preparation=await IsoFlow.Prepare(isoPathUsed!,ct);
+                    mountedByUs=preparation.MountedByLauncher;
+                    SetWizardStatus("ISO: "+preparation.Detail);
+                    if(preparation.GameRoot is null)
+                        throw new IOException("PREPARAR EBOOT.BIN não pôde identificar a ISO: "+preparation.Detail);
+                    gameRoot=preparation.GameRoot;
+                    IsoFlow.CheckSupportedEdition(gameRoot);
+                    SetWizardStatus("Jogo identificado: BLUS30443 · versão 01.00. Localizando o EBOOT.BIN…");
+                    SetSourceFromWork(gameRoot);
+                }
+                else
+                {
+                    gameRoot=existingRoot;
+                    IsoFlow.CheckSupportedEdition(gameRoot);
+                }
+                string bin=Path.Combine(gameRoot,"USRDIR","EBOOT.BIN");
+                if(!FileExistsQuietForComponent(bin))
+                    throw new IOException("EBOOT.BIN não foi localizado em "+bin+". Selecione uma origem com a PS3_GAME completa; nada foi alterado.");
+                p.Report(new("Verificando a resposta da ferramenta local (execução sem parâmetros inventados)","",0,0,0,0,0));
+                (bool started,string toolDetail)=await IsoFlow.ProbeToolRespondsAsync(tool,ct);
+                if(!started)
+                    throw new IOException("A ferramenta local de descriptografia não pôde ser executada. "+toolDetail);
+                SetWizardStatus("Ferramenta local responde. Executando a descriptografia documentada…");
+                p.Report(new("Executando a descriptografia com a ferramenta do usuário","",0,0,0,0,0));
+                producedElf=await IsoFlow.ScetoolDecryptAsync(tool,gameRoot,Path.Combine(Preferences.UserDataDirectory,"prep"),ct);
+                var producedInfo=new FileInfo(producedElf);
+                SetWizardStatus($"EBOOT.ELF aprovado pela identidade do projeto ({producedInfo.Length:N0} bytes; SHA-256 registrado no diagnóstico). Buscando o runtime aprovado…");
+                p.Report(new("Localizando o executável nativo aprovado","",0,0,0,0,0));
+                string? foundRuntime=IsoFlow.FindApprovedRuntime(destinationUsed,preferences.RuntimeExecutable);
+                if(foundRuntime is null)
+                {
+                    runtimeMissing=true;
+                    AddWizardAdvice("Executável nativo aprovado ausente — a descriptografia do EBOOT não gera o des_boot.exe. Como obter: copie da pasta Game/ do pacote Alpha 02-60FPS (Release) e confirme em SELECIONAR EXECUTÁVEL NATIVO; a ISO não contém este arquivo. O EBOOT.ELF aprovado fica em "+producedElf+".");
+                    SetWizardStatus("EBOOT.ELF aprovado e preservado; a instalação aguarda o executável nativo aprovado (informado separadamente no assistente).");
+                }
+                else
+                {
+                    p.Report(new("Preparando ou reparando a instalação com o ELF aprovado (SHA-256 com retomada)","",0,0,0,0,0));
+                    await Installation.Import(
+                        gameRoot,
+                        destinationUsed,
+                        producedElf,
+                        foundRuntime,
+                        p,
+                        ct,
+                        sourceImage: string.IsNullOrEmpty(existingRoot) ? isoPathUsed : null
+                    );
+                    var manifest=Installation.Load(destinationUsed);
+                    if(!manifest.Complete)
+                        throw new IOException("A instalação terminou incompleta. Repita o fluxo na mesma origem e destino para retomar de onde parou.");
+                    SetWizardStatus("PREPARAR EBOOT.BIN concluído: ELF aprovado e instalação íntegra em "+destinationUsed+".");
+                }
+            }
+            finally
+            {
+                // Same ownership test as the PREPARAR ISO wizard: a mount that
+                // exists only because of this attempt is removed, even when a
+                // cancellation raced the in-flight mount operation.
+                bool mountedNow=false;
+                try{mountedNow=(await IsoFlow.MountedVolume(isoPathUsed!,CancellationToken.None)) is not null;}
+                catch(Exception){mountedNow=mountedByUs;}
+                if(!initiallyMounted&&mountedNow)
+                {
+                    try{dismounted=await IsoFlow.DismountIso(isoPathUsed!,CancellationToken.None);}
+                    catch(Exception){OperationTrace.Observe("iso_dismount_failed");}
+                    SetWizardStatus(dismounted?"Imagem desmontada com segurança.":"A imagem permaneceu montada; desmonte pelo Explorador de Arquivos quando desejar.");
+                }
+            }
+        });
+        if(ok&&producedElf is not null)
+        {
+            elf.Text=producedElf;MarkComponentApproval(producedElf,true);
+            wizardAdvice.Add("EBOOT.BIN original preservado (a ferramenta somente o leu); tamanho e SHA-256 do ELF ficam no diagnóstico do launcher.");
+            if(runtimeMissing)
+            {
+                detail.Text="EBOOT.ELF aprovado em "+producedElf+". A instalação não foi preparada neste passo porque falta o executável nativo aprovado (des_boot.exe) — a orientação própria dele está no assistente de preparação.";
+                Refresh();
+                return true;
+            }
+            string runtimeInstalled=Path.Combine(destinationUsed,"runtime","des_boot.exe");
+            if(File.Exists(runtimeInstalled)){runtime.Text=runtimeInstalled;MarkComponentApproval(runtimeInstalled,true);}
+            destination.Text=destinationUsed;
+            preferences.UseExistingInstallation=false;
+            wizardAdvice.Add(dismounted?"Imagem ISO desmontada automaticamente ao término.":"A imagem já estava montada; o launcher não a removeu.");
+            UpdatePrepChecklist();
+            detail.Text="PREPARAR EBOOT.BIN concluído: ELF aprovado e instalação preparada em "+destinationUsed+".";
+            Refresh();await RefreshRuntimeCompatibility();
+            try{await SaveValidatedPreferences();}
+            catch(Exception ex){Error(ex);}
+        }
+        return ok;
+    }
+    void SetSourceFromWork(string path)=>_=Dispatcher.BeginInvoke(()=>{source.Text=path;});
     bool ApprovalMatchesState(string current,string remembered) =>
         (!string.IsNullOrWhiteSpace(current)&&FileExistsQuietForComponent(current))||
         (!string.IsNullOrWhiteSpace(remembered)&&string.Equals(current,remembered,StringComparison.OrdinalIgnoreCase));
@@ -641,7 +946,7 @@ public sealed class MainWindow : Window
             var candidates=IsoFlow.EbootElfCandidates(OriginRootForChecklist(source.Text),destinationPath,preferences.EbootPath);
             lines.Add(candidates.Count>0
                 ?"△ EBOOT.ELF: candidato localizado junto à origem/instalação; a identidade será conferida no PREPARAR."
-                :"✗ EBOOT.ELF: não localizado. Gere-o com o dump do RPCS3 ou use DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL); o launcher não descriptografa sozinho.");
+                :"✗ EBOOT.ELF: não localizado. Gere-o com o dump do RPCS3 ou o botão PREPARAR EBOOT.BIN (ferramenta local); o launcher não descriptografa sozinho.");
         }
         else if(!FileExistsQuietForComponent(elfPath))
             lines.Add("✗ EBOOT.ELF: o caminho informado não existe em disco.");
@@ -685,7 +990,7 @@ public sealed class MainWindow : Window
             }
         }
         catch(Exception){}
-        prepChecklist.Text=string.Join(Environment.NewLine,lines);
+        prepChecklist.Text=string.Join(Environment.NewLine,wizardAdvice.Count>0?lines.Concat(wizardAdvice):lines);
     }
     string OriginRootForChecklist(string sourcePath)
     {
@@ -864,6 +1169,9 @@ public sealed class MainWindow : Window
     internal Task<bool> WorkForTest(Func<IProgress<Transfer>,CancellationToken,Task> action)=>Work("Teste sintético de interface",action);
     internal string SetDestinationForTest(string path){destination.Text=path;return state.Text;}
     internal string GetPlayDisabledReasonForTest()=>playReason.Text;
+    internal string DetailTextForTest=>detail.Text;
+    internal string PrepChecklistForTest=>prepChecklist.Text;
+    internal bool PrepareIsoEnabledForTest=>prepareIso.IsEnabled;
     internal string SelectedRuntimeProfileForTest=>runtimeProfile.Text;
     internal void ArrangeLayoutForTest(double width){ArrangeHeader(width);ArrangeSettings(width);}
     internal (bool Header,bool Settings) CompactLayoutForTest=>(compactHeader,compactSettings);
@@ -876,7 +1184,7 @@ public sealed class MainWindow : Window
         catch(Exception e){Error(e);return false;}
         using(trace)
         {
-        cancellation=new();var token=cancellation.Token;bar.Value=0;bar.Visibility=Visibility.Collapsed;play.IsEnabled=import.IsEnabled=false;playReason.Text="Aguarde a conclusão da operação em andamento.";cancel.IsEnabled=true;
+        cancellation=new();var token=cancellation.Token;bar.Value=0;bar.Visibility=Visibility.Collapsed;play.IsEnabled=import.IsEnabled=prepareIso.IsEnabled=false;playReason.Text="Aguarde a conclusão da operação em andamento.";cancel.IsEnabled=true;
         operationStage.Text="Etapa: iniciando";
         var elapsed=Stopwatch.StartNew();
         Transfer? latestProgress=null;
@@ -894,9 +1202,12 @@ public sealed class MainWindow : Window
             string remaining=elapsed.Elapsed.TotalSeconds>=3&&p.BytesRead>=64L*1024*1024&&stageProgress is >5 and <99
                 ?$" · restante estimado: {TimeSpan.FromSeconds(elapsed.Elapsed.TotalSeconds*(100-stageProgress)/stageProgress):hh\\:mm\\:ss}"
                 :" · estimativa indisponível";
+            string throughput=trace.ContentBytesRead>0&&elapsed.Elapsed.TotalSeconds>=2
+                ?$" · leitura média {trace.ContentBytesRead/1048576.0/Math.Max(1,elapsed.Elapsed.TotalSeconds):N0} MiB/s"
+                :"";
             inventory.Text=$"{p.Done:N0} / {p.Total:N0} bytes processados · {p.Files:N0}/{p.Count:N0} arquivos · "+
                 $"{trace.ContentBytesRead:N0} bytes lidos via API · {trace.ContentBytesHashed:N0} bytes SHA-256 · "+
-                $"{trace.ContentBytesReused:N0} bytes reutilizados · {trace.ContentBytesWritten:N0} bytes gravados · tempo {elapsed.Elapsed:hh\\:mm\\:ss}{remaining}";
+                $"{trace.ContentBytesReused:N0} bytes reutilizados · {trace.ContentBytesWritten:N0} bytes gravados · tempo {elapsed.Elapsed:hh\\:mm\\:ss}{throughput}{remaining}";
         }
         var progressTimer=new System.Windows.Threading.DispatcherTimer
         {
@@ -943,13 +1254,23 @@ public sealed class MainWindow : Window
             using(var uiFinish=OperationTrace.Measure("Atualização final da interface e liberação de JOGAR",0,0))
             {
                 cancellation.Dispose();cancellation=null;
-                bar.Visibility=Height<500?Visibility.Collapsed:Visibility.Visible;import.IsEnabled=true;cancel.IsEnabled=false;Refresh();
+                bar.Visibility=Height<500?Visibility.Collapsed:Visibility.Visible;import.IsEnabled=true;prepareIso.IsEnabled=true;cancel.IsEnabled=false;Refresh();
                 if(completed)
                 {
                     bar.Value=100;
                     bar.Visibility=Visibility.Collapsed;
+                    long reusedBytes=trace.ContentBytesReused,reusedFiles=trace.HashesReused,writtenBytes=trace.ContentBytesWritten;
+                    string summary;
+                    if(reusedFiles>0&&writtenBytes>0)
+                        summary=$"Instalação preparada: {reusedFiles:N0} arquivos ({reusedBytes:N0} bytes) confirmados íntegros sem nova leitura e {writtenBytes:N0} bytes recopiados/corrigidos da origem.";
+                    else if(reusedFiles>0)
+                        summary=$"Instalação preparada: todos os {reusedFiles:N0} arquivos ({reusedBytes:N0} bytes) estavam íntegros — nada foi copiado novamente.";
+                    else if(writtenBytes>0)
+                        summary=$"Instalação preparada do zero: {writtenBytes:N0} bytes copiados com verificação SHA-256 individual.";
+                    else
+                        summary="Operação concluída e verificada.";
                     operationStage.Text="PRONTO — validação concluída; requisitos satisfeitos.";
-                    detail.Text="Operação concluída e verificada.";
+                    detail.Text=summary;
                 }
                 uiFinish?.Complete();
             }

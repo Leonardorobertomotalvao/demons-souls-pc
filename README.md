@@ -2,7 +2,9 @@
 
 **Porte experimental "Demon's Souls PC" (Alpha 0.2).** Tradução estática (*static recompilation*) de *Demon's Souls* (PS3, América do Norte, BLUS30443) para Windows x64: o código PowerPC/SPU do jogo é convertido para C antecipadamente (AOT), compilado e ligado a uma reimplementação (clean-room) das bibliotecas de sistema do PS3. Renderização via Direct3D 12, áudio via WASAPI, launcher em WPF/.NET 8 para instalação, verificação de integridade e inicialização.
 
-> **Este repositório não contém código do jogo, dados do jogo, saves, firmware, BIOS, chaves ou executáveis do jogo.** Você precisa da sua própria cópia legal. Veja [Licenciamento e avisos](#17-licenciamento-e-avisos).
+> **Este repositório não contém código do jogo, dados do jogo, saves, firmware, BIOS, chaves ou executáveis do jogo.** Vocês precisa da sua própria cópia legal. Veja [Licenciamento e avisos](#17-licenciamento-e-avisos).
+>
+> **Histórico de versões do launcher**: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -30,7 +32,8 @@ Nível de maturidade: **protótipo funcional, validado em uma máquina de refer�
 - **Save/load funcionando**, incluindo sons de menu.
 - **60 FPS**: perfil aprovado por verificação de identidade do runtime; em 1-1, com `DES_FPS=60` e `VBLANK_MHZ=240000`, chegaram a medir ~120 FPS **nessa máquina específica** — não é promessa para outras configurações.
 - **Correção do bug de silêncio total de áudio na inicialização**: causa raiz documentada (corrida da fila de eventos do libmixer) e correção publicada em `patches/des-audio-notify-fix.patch`; validada automaticamente por A/B (o PCM chega ao WASAPI com o fix ligado e não chega desligado; 3752/3752 e 8442/8442 notificações em dois conjuntos de testes; detalhes em `docs/34`) **e auditivamente pelo autor em 2026-10-22, numa instalação isolada** (runtime `83B238…`).
-- **Launcher Alpha 0.2**: compila, abre, importa/repara instalações, aplica gates de identidade (bloqueia runtime não aprovado) e registra cada operação em trace JSONL.
+- **Launcher Alpha 0.2**: compila, abre, importa/repara instalações, aplica gates de identidade (bloqueia runtime não aprovado) e registra as operações da GUI em trace JSONL (a CLI `--import` atualmente não grava trace — limitação documentada em `docs/35`; as decisões estão nas medições JSON de stdout).
+- **Otimização da preparação do jogo (26-10-2026, `docs/35`)**: preparação/verificação sobre uma instalação íntegra lê **0 bytes** do destino (confirmação por identidade NTFS/USN do journal) e, quando a origem é a ISO com identidade já registrada, **0 bytes da origem também** (registro assinado `installation-source.json`); medições: integridade completa em **4,0 s** (antes: falha por validadores), reparo de um arquivo em **16,1 s** (antes: 413 s) e re-preparação completa em **9,1 s** (antes: 413–423 s). Os validadores passaram a aceitar artefatos runtime legítimos (`.arealoadlist` do patch 60 FPS e buckets vazios de cache) sem afrouxar a detecção de divergência real.
 
 ### 3.2 Passou em teste técnico; falta validação em outras máquinas
 
@@ -81,8 +84,8 @@ EBOOT.BIN do jogo (SELF) ──RPCS3/scetool──▶ EBOOT.ELF decriptado (Powe
 
 | Pasta | Função |
 |---|---|
-| `docs/` | Documentação técnica crônica (00–34): setup, análise, boot, SPURS/SPU, legal, launcher, áudio |
-| `launcher-alpha02-hotfix/` | Fonte do launcher Windows atual (WPF/.NET 8, self-contained) |
+| `docs/` | Documentação técnica crônica (00–35): setup, análise, boot, SPURS/SPU, legal, launcher, áudio, otimização da preparação (35) |
+| `launcher-alpha02-hotfix/` | Fonte do launcher Windows atual (WPF/.NET 8, self-contained) — preparação com confirmação por identidade NTFS/USN e reuso de origem assinado |
 | `launcher/` | Fonte do launcher original (legado; o atual é o `hotfix`) |
 | `port/` | Camada do porte: CMake, UI RmlUi (fontes OFL/Apache com licenças), heap, menu SFX, options, stubs |
 | `patches/` | Patch do fix de áudio sobre o `ps3recomp` upstream |
@@ -162,7 +165,7 @@ O launcher recusa runtime não aprovado com "60 FPS bloqueado — Confira os cam
 | Alpha 0.2 com correção de áudio | `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E` | Aprovada (áudio validado auditivamente pelo autor) |
 | Qualquer outro `des_boot.exe` | — | **Bloqueado por segurança** |
 
-O `EBOOT.ELF` esperado tem identidade própria (SHA-256). O launcher também valida: manifesto da instalação (`installation.json` com SHA de cada componente importado), identidades NTFS/USN journal e DPAPI por máquina, e regista tudo em `logs\operations\*.jsonl` (com tamanho, hashes e fases da operação). Sem dados pessoais nos logs.
+O `EBOOT.ELF` esperado tem identidade própria (SHA-256). O launcher também valida: manifesto da instalação (`installation.json` com SHA de cada componente importado), identidades NTFS/USN journal e DPAPI por máquina, e regista tudo em `logs\operations\*.jsonl` (com tamanho, hashes e fases da operação). Sem dados pessoais nos logs. Com o manifesto completo e o journal USN válidos, `--verify`/VERIFICAR confirma a instalação íntegra **sem reler os arquivos** (medições em `docs/35`); divergência real cai no fallback honesto de hash apenas do arquivo divergente.
 
 ## 12. Diagnóstico rápido
 
@@ -182,7 +185,7 @@ O `EBOOT.ELF` esperado tem identidade própria (SHA-256). O launcher também val
 - `VfsPolicyTest.cs` — testes de política VFS embutidos na fonte do launcher.
 - CLI do launcher: `--fps-compatibility` (gates sem GUI), `--import`, `--prepare-iso`, `--detect-tools`, `--window-test`, etc. (ver `Program.cs`).
 - `scripts/audio-ab-diagnostic.ps1` — A/B de áudio do runtime (`DES_AUDIO_NOTIFY_FIX=0/1`), gerando perfil isolado com telemetria (`AUDIO_PEAK/RATE/GAPS`).
-- Self-test (`--self-test`) roda em clone limpo: os manifestos de coordenação locais não distribuídos viram `SKIP` quando ausentes, e as identidades aprovadas continuam verificadas pelos demais casos; novas coberturas do assistente de ISO: escada de `EBOOT.ELF` (candidatos junto à origem/destino, decoys `EBOOT.BIN/SELF` ignorados), identidade por `PARAM.SFO`, sonda de ferramenta local (nunca fabrica caminho), diagnóstico honesto do ambiente de recompilação (ps3recomp nomeado explicitamente) e rejeição por identidade de binário fictício.
+- Self-test (`--self-test`) roda em clone limpo: os manifestos de coordenação locais não distribuídos viram `SKIP` quando ausentes, e as identidades aprovadas continuam verificadas pelos demais casos; novas coberturas do assistente de ISO: escada de `EBOOT.ELF` (candidatos junto à origem/destino, decoys `EBOOT.BIN/SELF` ignorados), identidade por `PARAM.SFO`, sonda de ferramenta local (nunca fabrica caminho), diagnóstico honesto do ambiente de recompilação (ps3recomp nomeado explicitamente) e rejeição por identidade de binário fictício. Coberturas novas da preparação otimizada (26-10-2026): hashing paralelo limitado com contrato de primeiro-erro (`RunBounded`), reuso da identidade da imagem de origem com fallback por adulteração do registro, confirmação USN na verificação com mutação de mesmo tamanho rejeitada e validação estrita de `--source-image` (ausente/Întegro/alto-falha).
 - Não há suíte "pytest/CT executável de fora" neste repo: os testes de análise/boot históricos são narrados em `docs/` com evidências (hashes, logs).
 
 ## 14. Reproduzir a correção de áudio a partir do código

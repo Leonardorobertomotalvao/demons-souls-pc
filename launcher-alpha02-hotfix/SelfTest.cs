@@ -205,6 +205,24 @@ public static class SelfTest
             Assert(!failedWork.GetAwaiter().GetResult()&&launcherWindow.PlayEnabledForTest&&
                 !launcherWindow.OperationBusyForTest&&launcherWindow.OperationProgressForTest<100,
                 "a failed operation logs and releases Play without leaving a false 100% completion");
+            TestPrepareIsoWizard(launcherWindow,testRoot);
+            // PREPARAR EBOOT.BIN negative in the window: a broken image is
+            // refused before any local tool runs, the cause names the ISO
+            // identification and the single-flight guard is cleared.
+            launcherWindow.SuppressErrorDialogsForTest();
+            string fakeEbootIso=Path.Combine(testRoot,"wizard-fake.iso");
+            string windowTool=Path.Combine(Environment.SystemDirectory??"C:\\Windows\\System32","whoami.exe");
+            Task<bool> ebootTask=launcherWindow.PrepareEbootBinCore(fakeEbootIso,windowTool);
+            PumpUntil(ebootTask);
+            bool ebootCompleted=ebootTask.GetAwaiter().GetResult();
+            string ebootDetail=launcherWindow.DetailTextForTest;
+            bool ebootBusy=launcherWindow.OperationBusyForTest;
+            bool ebootPrepEnabled=launcherWindow.PrepareIsoEnabledForTest;
+            Assert(!ebootCompleted,"PREPARAR EBOOT.BIN refuses a broken image before any local tool work");
+            Assert(ebootDetail.Contains("não pôde identificar a ISO",StringComparison.Ordinal),
+                "EBOOT.BIN stage failure names the ISO identification problem");
+            Assert(!ebootBusy,"EBOOT.BIN stage clears the single-flight guard when the attempt fails");
+            Assert(ebootPrepEnabled,"PREPARAR ISO stays re-enabled after the EBOOT.BIN attempt ends");
         }
         finally{SynchronizationContext.SetSynchronizationContext(originalContext);}
         Console.WriteLine("PASS: UI operation transition, delayed progress-bar visibility, success-only 100%, and JOGAR release after failure");
@@ -615,6 +633,83 @@ public static class SelfTest
         await Installation.Import(source,dest,elf,runtime,null,CancellationToken.None,true);await Installation.Verify(dest,null,CancellationToken.None,fixture:true);
         Assert(Directory.GetFiles(Path.GetDirectoryName(installed)!,"*.corrupt-*").Length==1,"repair preserves corrupt copy");
         Console.WriteLine("PASS: repair and quarantine");
+        // Optimized-prepare regression suite: bounded parallel hashing with the
+        // first-failure contract, USN-backed destination confirmation on the
+        // plain Verify path, and origin-identity reuse via the signed side file.
+        {
+            var boundedItems=Enumerable.Range(0,32).ToList();
+            var seen=new bool[32];var seenCount=0;var activeCount=0;var maxActiveCount=0;var overlapLock=new object();
+            await Installation.RunBounded(boundedItems,4,async i=>
+            {
+                int current=Interlocked.Increment(ref activeCount);
+                lock(overlapLock){if(current>maxActiveCount)maxActiveCount=current;}
+                try{await Task.Delay(8);}finally{Interlocked.Decrement(ref activeCount);}
+                if(seen[i])throw new InvalidOperationException("item processed twice: "+i);
+                seen[i]=true;Interlocked.Increment(ref seenCount);
+            });
+            Assert(seenCount==boundedItems.Count&&seen.All(seenFlag=>seenFlag)&&maxActiveCount<=4,
+                "RunBounded processes every item exactly once and honors the requested degree");
+            await Reject(()=>Task.Run(()=>Installation.RunBounded(new[]{0,1,2},4,async i=>
+            {if(i==1)throw new IOException("bounded worker failure");await Task.Delay(2);})),"RunBounded rethrows the first worker failure");
+            Console.WriteLine("PASS: bounded parallel hashing");
+        }
+        {
+            string imageFile=Path.Combine(test,"synthetic-image.iso");
+            File.WriteAllBytes(imageFile,File.ReadAllBytes(Path.Combine(test,"test.elf")));
+            long firstRead,secondRead,thirdRead;
+            using(var first=OperationTrace.Start("selftest-source-identity-first"))
+            {
+                using(first.Activate())await Installation.Import(source,dest,elf,runtime,null,CancellationToken.None,true,imageFile);
+                firstRead=first.ContentBytesRead;
+                Assert(firstRead>0,"first prepare to a fresh identity record hashes the origin normally");
+            }
+            using(var second=OperationTrace.Start("selftest-source-identity-second"))
+            {
+                using(second.Activate())await Installation.Import(source,dest,elf,runtime,null,CancellationToken.None,true,imageFile);
+                secondRead=second.ContentBytesRead;
+            }
+            Assert(File.Exists(Installation.SourceImageIdentityPathForTest(dest)),"origin image identity side file is registered");
+            Assert(secondRead==0,"origin identity unchanged: the second prepare reads nothing for already-recorded source hashes");
+            string sideFile=Installation.SourceImageIdentityPathForTest(dest);
+            byte[] sideBytes=File.ReadAllBytes(sideFile);
+            for(int i=0;i<sideBytes.Length;i++)if(sideBytes[i]==(byte)'"'){sideBytes[i]=(byte)'\'';break;}
+            File.WriteAllBytes(sideFile,sideBytes);
+            using(var third=OperationTrace.Start("selftest-source-identity-tampered"))
+            {
+                using(third.Activate())await Installation.Import(source,dest,elf,runtime,null,CancellationToken.None,true,imageFile);
+                thirdRead=third.ContentBytesRead;
+                Assert(thirdRead>0,"tampered origin identity record forces honest source re-hashing");
+            }
+            Console.WriteLine("PASS: source-image identity reuse and tamper fallback");
+        }
+        {
+            byte[] mutated=(byte[])originalManagedAsset.Clone();mutated[24]^=0x77;
+            File.WriteAllBytes(installed,mutated);
+            await Reject(()=>Installation.Verify(dest,null,CancellationToken.None,fixture:true),
+                "Verify rejects same-size mutation even when the manifest snapshot is trusted");
+            await Installation.Import(source,dest,elf,runtime,null,CancellationToken.None,true);
+            await Installation.Verify(dest,null,CancellationToken.None,fixture:true);
+            Console.WriteLine("PASS: managed Verify USN confirmation keeps content authority");
+        }
+        {
+            string existing=Path.Combine(test,"probe çéü image 'quote'.iso");
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(existing)!);
+            File.WriteAllBytes(existing,new byte[]{1,2,3});
+            Func<string,string?,string> get=(key,fallback)=>fallback??"";
+            Assert(Program.RequireSourceImage(new[]{ "--source" },get) is null,"absent --source-image stays optional and yields null");
+            Assert(Program.RequireSourceImage(new[]{ "--source-image",existing },get)==existing,
+                "--source-image with an existing path is returned intact (spaces, accents and apostrophes preserved)");
+            bool rejectedExisting=false;
+            try{Program.RequireSourceImage(new[]{ "--source-image",existing+"-ausente" },get);}
+            catch(FileNotFoundException e){rejectedExisting=true;Assert(e.FileName is not null&&e.Message.Contains("--source-image"),"loud failure names the offending argument");}
+            Assert(rejectedExisting,"--source-image pointing at a nonexistent file fails loudly instead of degrading silently");
+            bool rejectedMissing=true;
+            try{Program.RequireSourceImage(new[]{ "--source-image" },get);rejectedMissing=false;}
+            catch(ArgumentException){}
+            Assert(rejectedMissing,"--source-image with no value is an argument error, not a silent skip");
+            File.Delete(existing);
+            Console.WriteLine("PASS: CLI --source-image validation (absence, existence, loud failure)");
+        }
         await Reject(()=>Task.Run(()=>Installation.Child(dest,"../escape")),"path traversal");
         await Reject(()=>Task.Run(()=>Installation.Child(dest,"vfs/file:ads")),"ADS");
         await Reject(()=>Task.Run(()=>Installation.Child(dest,"vfs/CON.txt")),"device path");
@@ -648,6 +743,7 @@ public static class SelfTest
                 Console.WriteLine("SKIP: junction rejection fixtures unavailable ("+(await stderr+await stdout).Trim()+")");
         }
         TestIsoFlowSupport(source,dest,test);
+        await TestEbootLocalTool(test);
         Console.WriteLine("SELF_TEST_PASS "+test);
     }
     static void TestIsoFlowSupport(string source,string dest,string test)
@@ -688,6 +784,69 @@ public static class SelfTest
         Assert(!RuntimeService.IsApproved60FpsRuntimeHash(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(fakeRuntime)))),
             "runtime ladder rejects a fixture binary by identity");
         Console.WriteLine("PASS: ISO preparation assistant components (ELF ladder, identity, tool probe, native-build diagnostic, runtime identity)");
+    }
+    // PREPARAR ISO wizard, exercised with a broken image so the run stays
+    // honest: no mount is possible, nothing is copied and the window ends in
+    // the documented error state with the log path and re-enabled controls.
+    // Must run inside the legacy UI block (window thread with installed
+    // DispatcherSynchronizationContext) because WPF objects require thread
+    // affinity and the wizard awaits internally.
+    static void TestPrepareIsoWizard(MainWindow launcherWindow,string testRoot)
+    {
+        // The fake image fails at mount long before any destination work, so
+        // the active destination from the previous synthetic UI steps stays
+        // untouched: changing it would start an async compatibility check
+        // whose late completion would race the legacy requirements below.
+        string fakeIso=Path.Combine(testRoot,"wizard-fake.iso");File.WriteAllBytes(fakeIso,new byte[2048]);
+        launcherWindow.SuppressErrorDialogsForTest();
+        Task<bool> wizard=launcherWindow.PrepareIsoWizardCore(fakeIso);
+        PumpUntil(wizard);
+        bool completed=wizard.GetAwaiter().GetResult();
+        string detail=launcherWindow.DetailTextForTest;
+        bool busy=launcherWindow.OperationBusyForTest;
+        bool prepEnabled=launcherWindow.PrepareIsoEnabledForTest;
+        Assert(!completed,"PREPARAR ISO wizard refuses a broken image instead of proceeding");
+        Assert(detail.Contains("PREPARAR ISO não pôde continuar",StringComparison.Ordinal),
+            "wizard failure reports the honest mount outcome");
+        Assert(detail.Contains("launcher.log",StringComparison.Ordinal),
+            "wizard failure surfaces the diagnostic log path");
+        Assert(!busy,"wizard clears the single-flight guard when the attempt fails");
+        Assert(prepEnabled,"PREPARAR ISO re-enables after the attempt ends");
+        Console.WriteLine("PASS: PREPARAR ISO wizard (honest failure, log path, no busy state)");
+    }
+    // PREPARAR EBOOT.BIN local-tool gate: probe of the tool responds, real
+    // execution failures surface the tool's own outcome, a produced file is
+    // never approved merely for existing (strict identity + recorded size and
+    // SHA-256 evidence) and the EBOOT.BIN source is never written. The
+    // positive decrypt path needs the user's scetool copy and key file, so it
+    // stays validated by identity alone here — a missing artifact or a
+    // mismatch is exercised with real process runs instead.
+    static async Task TestEbootLocalTool(string test)
+    {
+        string fakeRoot=Path.Combine(test,"eboottool-"+Guid.NewGuid().ToString("N"),"PS3_GAME");
+        string usr=Path.Combine(fakeRoot,"USRDIR");Directory.CreateDirectory(usr);
+        string fakeBin=Path.Combine(usr,"EBOOT.BIN");File.WriteAllBytes(fakeBin,new byte[512]);
+        string prep=Path.Combine(test,"prep-eboottool");Directory.CreateDirectory(prep);
+        string whoami=Path.Combine(Environment.SystemDirectory??"C:\\Windows\\System32","whoami.exe");
+        var configured=IsoFlow.FindScetool(whoami);
+        Assert(configured.Path is not null&&string.Equals(configured.Path,whoami,StringComparison.OrdinalIgnoreCase),
+            "configured local tool path with a real file wins the probe");
+        Assert(IsoFlow.FindScetool(Path.Combine(test,"missing-tool.exe")).Path is null,
+            "configured local tool path pointing at an absent file is refused instead of silently replaced");
+        (bool started,string startedDetail)=await IsoFlow.ProbeToolRespondsAsync(whoami,CancellationToken.None);
+        Assert(started&&startedDetail.Length>0,"tool probe reports a living executable with its own output");
+        (bool absent,_)=await IsoFlow.ProbeToolRespondsAsync(Path.Combine(test,"missing-tool.exe"),CancellationToken.None);
+        Assert(!absent,"tool probe refuses an absent executable before any decrypt work");
+        await Reject(()=>Task.Run(()=>IsoFlow.ScetoolDecryptAsync(whoami,fakeRoot,prep,CancellationToken.None)),
+            "a real tool run that produces no output fails honestly with the tool's exit evidence");
+        Assert(File.Exists(fakeBin)&&new FileInfo(fakeBin).Length==512,"the EBOOT.BIN source stays byte-identical after failed tool runs");
+        string garbage=Path.Combine(test,"eboot-garbage.elf");File.WriteAllBytes(garbage,new byte[4096]);
+        await Reject(()=>Task.Run(()=>IsoFlow.ValidateDecryptedEboot(garbage,new FileInfo(fakeBin).Length)),
+            "non-empty ELF output without the approved identity is rejected explicitly with size and SHA-256 recorded");
+        Assert(File.Exists(garbage),"rejected ELF output is kept for human review instead of deleted");
+        await Reject(()=>Task.Run(()=>IsoFlow.ValidateDecryptedEboot(Path.Combine(test,"eboot-missing-output.elf"),512)),
+            "missing ELF output after a 'successful' run refuses loudly");
+        Console.WriteLine("PASS: PREPARAR EBOOT.BIN local-tool gate (probe, execution failure, identity rejection, evidence, source preservation)");
     }
     sealed class CancelProgress(CancellationTokenSource cts):IProgress<Transfer>{public void Report(Transfer p){if(p.Phase.Contains("Copiando",StringComparison.OrdinalIgnoreCase)&&p.Copied>=1024*1024)cts.Cancel();}}
     sealed class CaptureProgress:IProgress<Transfer>

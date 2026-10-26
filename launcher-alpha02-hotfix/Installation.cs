@@ -476,7 +476,7 @@ public static class Installation
         Save(path,state);
     }
     internal static bool HasUsnSnapshotForTest(string path) => ReadFileSnapshot(path)?.Usn.HasValue==true;
-    internal static bool HasUsnJournalForTest(string path) => ReadUsnJournalId(path).HasValue;
+    internal static string SourceImageIdentityPathForTest(string dest)=>SourceImageIdentityPath(dest);    internal static bool HasUsnJournalForTest(string path) => ReadUsnJournalId(path).HasValue;
     internal static string UsnJournalStatusForTest(string path){_ = ReadUsnJournalId(path,out string status);return status;}
     internal static bool HasDirectoryIdentityForTest(string path) => ReadDirectoryIdentity(path) is not null;
     internal static void ResetIntegrityKeyForTest(){lock(integrityKeyLock)integrityKey=null;}
@@ -539,22 +539,70 @@ public static class Installation
         ValidateInventory(root,m);
         foreach(string directory in m.Directories) if(!Directory.Exists(Child(root,directory)))throw new IOException("Pasta ausente: "+directory);
         long total=m.Files.Sum(e=>e.Length);
+        long? journalId=ReadUsnJournalId(root,out string verifyJournalStatus);
+        OperationTrace.RecordDecision("usn_journal",verifyJournalStatus);
+        bool trustedSnapshot=IsManifestSnapshotTrusted(root,m,journalId,out string verifyStateReason);
+        OperationTrace.RecordDecision(trustedSnapshot?"verify_reused_ntfs_identity":"verify_full_hash_required",
+            trustedSnapshot?"manifesto assinado e journal USN validados; arquivos com identidade inalterada não são relidos":
+            verifyStateReason);
         using var phase=OperationTrace.Measure("Verificação SHA-256",m.Files.Count,total);
-        long done=0; int n=0;
-        foreach(var e in m.Files)
+        long done=0; long bytesRead=0; int verified=0;
+        // The authenticated manifest still pins each expected hash. A change in
+        // one file must not invalidate unchanged NTFS/USN identities; the same
+        // per-entry evidence idiom as VerifyForLaunch's slow path.
+        var updates=new System.Collections.Concurrent.ConcurrentDictionary<int,FileSnapshot>();
+        var pending=new List<int>();
+        for(int i=0;i<m.Files.Count;i++)
         {
-            ct.ThrowIfCancellationRequested(); string file=Child(root,e.Path);
+            ct.ThrowIfCancellationRequested(); var e=m.Files[i]; string file=Child(root,e.Path);
             if (!File.Exists(file))throw new IOException("Arquivo ausente: "+e.Path+". Use Reparar com a origem disponível.");
             var before=ReadFileSnapshot(file);
-            long lengthBefore=new FileInfo(file).Length;
-            string found=await Hash(file,ct);
-            long lengthAfter=new FileInfo(file).Length;
-            var after=ReadFileSnapshot(file);
+            if(trustedSnapshot&&EntryCanReuse(e,before))
+            {
+                OperationTrace.RecordReuse(e.Length);
+                done+=e.Length; verified++;
+                progress?.Report(new("Arquivo confirmado pela identidade NTFS do manifesto",e.Path,done,total,0,verified,m.Files.Count));
+                continue;
+            }
+            pending.Add(i);
+        }
+        await RunBounded(pending,PreferredConcurrency(),async i=>
+        {
+            var e=m.Files[i];string path=Child(root,e.Path);
+            ct.ThrowIfCancellationRequested();
+            var before=ReadFileSnapshot(path);
+            long lengthBefore=new FileInfo(path).Length;
+            string found=await Hash(path,ct,count=>Interlocked.Add(ref bytesRead,count)).ConfigureAwait(false);
+            long lengthAfter=new FileInfo(path).Length;
+            var after=ReadFileSnapshot(path);
             if(lengthBefore!=lengthAfter||(before is not null&&!before.SameObjectState(after)))
                 throw new IOException("Arquivo alterado enquanto era verificado; feche o runtime ou outros programas que possam gravá-lo: "+e.Path);
             if(lengthAfter!=e.Length||!string.Equals(found,e.Sha256,StringComparison.OrdinalIgnoreCase))
                 throw IntegrityMismatch(e.Path,e.Length,lengthAfter,e.Sha256,found,"instalação gerenciada");
-            done += e.Length; n++; progress?.Report(new("Verificando",e.Path,done,total,0,n,m.Files.Count));
+            if(after is not null)updates[i]=after;
+            Interlocked.Add(ref done,e.Length);
+            int processed=Interlocked.Increment(ref verified);
+            progress?.Report(new("Verificando",e.Path,Interlocked.Read(ref done),total,0,processed,m.Files.Count,Interlocked.Read(ref bytesRead)));
+        });
+        foreach(var pair in updates)
+        {
+            m.Files[pair.Key]=m.Files[pair.Key] with
+            {
+                LastWriteUtcTicks=pair.Value.LastWriteUtcTicks,
+                CreationUtcTicks=pair.Value.CreationUtcTicks,
+                VolumeSerialNumber=pair.Value.VolumeSerialNumber,
+                FileId=pair.Value.FileId,
+                Usn=pair.Value.Usn
+            };
+        }
+        if(trustedSnapshot&&m.Complete&&updates.Count>0)
+        {
+            // Refresh the touched entries' object state in the signed snapshot,
+            // mirroring VerifyForLaunch's metadata phase.
+            using var metadataPhase=OperationTrace.Measure("Gravação do snapshot de integridade atualizado",m.Files.Count,total);
+            SignManifestSnapshot(root,m);
+            Save(Child(root,"installation.json"),m);
+            metadataPhase?.Complete();
         }
         GameRoot(Child(root,"vfs/PS3_GAME")); CheckElf(Child(root,"runtime/EBOOT.ELF"),fixture);
         phase?.Complete();
@@ -692,7 +740,7 @@ public static class Installation
         foreach(var file in Inventory(Child(root,"vfs/PS3_GAME")).Where(file=>!IsQuarantined(file.Relative)))
         {
             string path="vfs/PS3_GAME/"+file.Relative.Replace('\\','/');
-            if(!IsGeneratedCache(path,expected))actual.Add(path,file.Length);
+            if(!IsRuntimeDerivedArtifact(path,expected))actual.Add(path,file.Length);
         }
         if(Directory.Exists(Child(root,"runtime")))
             foreach(var file in Inventory(Child(root,"runtime")).Where(file=>!IsQuarantined(file.Relative)))
@@ -1089,13 +1137,13 @@ public static class Installation
         foreach(var file in Inventory(Child(root,"vfs/PS3_GAME")).Where(file=>!IsQuarantined(file.Relative)))
         {
             string path="vfs/PS3_GAME/"+file.Relative.Replace('\\','/');
-            if(!IsGeneratedCache(path,expected))actual.Add(path,file.Length);
+            if(!IsRuntimeDerivedArtifact(path,expected))actual.Add(path,file.Length);
         }
         if(Directory.Exists(Child(root,"runtime")))
         foreach(var file in Inventory(Child(root,"runtime")).Where(file=>!IsQuarantined(file.Relative)))
         {
             string path="runtime/"+file.Relative.Replace('\\','/');
-            if(!IsGeneratedCache(path,expected))actual.Add(path,file.Length);
+            if(!IsRuntimeDerivedArtifact(path,expected))actual.Add(path,file.Length);
         }
         if(actual.Count!=expected.Count)
         {
@@ -1257,6 +1305,16 @@ public static class Installation
         $"Divergência de integridade em '{path}' ({provenance}). "+
         $"Tamanho esperado: {expectedLength:N0} bytes; encontrado: {foundLength:N0} bytes. "+
         $"SHA-256 esperado: {expectedHash}; SHA-256 encontrado: {foundHash}. O arquivo divergente foi preservado.");
+    // Files the runtime rewrites as part of normal play (area streaming lists) are
+    // launcher-adjacent artifacts, not user content: they are not part of the
+    // manifest domain, they are regenerated on every load, and the same set of
+    // validators must treat them consistently so a single game session does not
+    // permanently break verification or REPARAR.
+    static readonly System.Text.RegularExpressions.Regex RuntimeAreaLoadList=new(
+        @"^vfs/PS3_GAME/USRDIR/(map|ship_ocean)/[^/]+\.arealoadlist$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    static bool IsRuntimeDerivedArtifact<T>(string path,IReadOnlyDictionary<string,T> expected) =>
+        IsGeneratedCache(path,expected)||IsRuntimeResourceCache(path)||RuntimeAreaLoadList.IsMatch(path.Replace('\\','/'));
     static void ValidateInventory(string root,Manifest manifest)
     {
         var expected=manifest.Files.ToDictionary(e=>e.Path.Replace('\\','/'),e=>e.Length,StringComparer.OrdinalIgnoreCase);
@@ -1264,12 +1322,12 @@ public static class Installation
         foreach(var file in Inventory(Child(root,"vfs/PS3_GAME")).Where(f=>!IsQuarantined(f.Relative)))
         {
             string path="vfs/PS3_GAME/"+file.Relative.Replace('\\','/');
-            if(!IsGeneratedCache(path,expected))actual.Add(path,file.Length);
+            if(!IsRuntimeDerivedArtifact(path,expected))actual.Add(path,file.Length);
         }
         foreach(var file in Inventory(Child(root,"runtime")).Where(f=>!IsQuarantined(f.Relative)))
         {
             string path="runtime/"+file.Relative.Replace('\\','/');
-            if(!IsGeneratedCache(path,expected))actual.Add(path,file.Length);
+            if(!IsRuntimeDerivedArtifact(path,expected))actual.Add(path,file.Length);
         }
         if(actual.Count!=expected.Count||actual.Any(e=>!expected.TryGetValue(e.Key,out long length)||length!=e.Value))
             throw new IOException("Os arquivos da instalação não correspondem ao manifesto. Use Reparar com a origem disponível.");
@@ -1293,7 +1351,157 @@ public static class Installation
         try{return new FileStream(path,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);}
         catch(IOException){throw new IOException("Outra operação está usando esta instalação. Aguarde a conclusão antes de retomar ou jogar.");}
     }
-    public static async Task Import(string selected,string destination,string elf,string runtime,IProgress<Transfer>? progress,CancellationToken ct,bool fixture=false)
+    // --------------------------------------------------------------------
+    // Prepare/repair acceleration (alpha02).
+    //
+    // The two dominant costs of PREPARAR over an existing installation are the
+    // re-hashing of the origin (the mounted image) and the re-hashing of the
+    // whole managed destination, even when nothing changed. Both are avoided
+    // with the project's own trust machinery:
+    //
+    // 1. Destination: a Complete manifest carries a DPAPI-HMAC over every
+    //    entry plus NTFS identity (volume serial, file id, USN journal). While
+    //    the USN journal proves no file was modified, the stored SHA-256 stays
+    //    authoritative and no re-read is needed for those files. Anything that
+    //    fails the identity check is re-hashed (bounded parallel work), so a
+    //    same-length mutation is still caught by content.
+    //
+    // 2. Origin: the wizard knows the exact image file it mounted. Its NTFS
+    //    identity and USN are stored in a dedicated, separately signed side
+    //    file (below) and are re-validated on every prepare. With the same
+    //    image unchanged, the recorded per-file hashes of the signed manifest
+    //    remain the origin's content authority.
+    //
+    // The side file is intentionally NOT part of Manifest: adding fields to
+    // the manifest changes its serialized shape and would break previously
+    // stored MACs, invalidating trust for existing managed installations.
+    // It reuses the same DPAPI-protected integrity key and MAC idiom.
+    // --------------------------------------------------------------------
+    public sealed class SourceImageIdentity
+    {
+        public int Schema { get; set; } = 1;
+        public string? Origin { get; set; }
+        public long? ImageLength { get; set; }
+        public long? ImageLastWriteUtcTicks { get; set; }
+        public long? ImageCreationUtcTicks { get; set; }
+        public uint? ImageVolumeSerialNumber { get; set; }
+        public ulong? ImageFileId { get; set; }
+        public long? ImageUsn { get; set; }
+        public string IntegrityMac { get; set; } = "";
+    }
+    static string ComputeSourceImageIdentityMac(SourceImageIdentity record)
+    {
+        string previous=record.IntegrityMac;
+        try
+        {
+            record.IntegrityMac="";
+            return Convert.ToHexString(HMACSHA256.HashData(GetIntegrityKey(),
+                JsonSerializer.SerializeToUtf8Bytes(record,Json)));
+        }
+        finally{record.IntegrityMac=previous;}
+    }
+    static string SourceImageIdentityPath(string dest)=>Child(dest,"installation-source.json");
+    static SourceImageIdentity? LoadSourceImageIdentity(string dest)
+    {
+        string path=SourceImageIdentityPath(dest);
+        if(!File.Exists(path))return null;
+        try
+        {
+            var record=JsonSerializer.Deserialize<SourceImageIdentity>(OperationTrace.ReadAuxiliaryText(path),Json);
+            return record is null||record.Schema!=1||string.IsNullOrEmpty(record.IntegrityMac)?null:record;
+        }
+        catch(Exception error) when(error is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            OperationTrace.RecordDecision("source_identity_unreadable",error.GetType().Name);
+            return null;
+        }
+    }
+    static bool IsSourceImageIdentityTrusted(SourceImageIdentity? record,string source,FileSnapshot? image,out string reason)
+    {
+        if(record is null){reason="registro de identidade da origem ausente";return false;}
+        if(record.IntegrityMac.Length!=64||!record.IntegrityMac.All(Uri.IsHexDigit)||
+           !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(record.IntegrityMac),
+               Convert.FromHexString(ComputeSourceImageIdentityMac(record))))
+        {reason="MAC do registro de identidade da origem inválido";return false;}
+        if(!string.Equals(record.Origin,source,StringComparison.Ordinal)){reason="origem diferente da registrada";return false;}
+        if(image is null){reason="arquivo de imagem não disponível nesta execução";return false;}
+        if(!image.Usn.HasValue||record.ImageUsn is null||record.ImageLength is null||
+           record.ImageLastWriteUtcTicks is null||record.ImageCreationUtcTicks is null||
+           record.ImageVolumeSerialNumber is null||record.ImageFileId is null)
+        {reason="identidade NTFS/USN da imagem indisponível";return false;}
+        var stored=new FileSnapshot(record.ImageLength.Value,record.ImageLastWriteUtcTicks.Value,
+            record.ImageCreationUtcTicks.Value,record.ImageVolumeSerialNumber.Value,
+            record.ImageFileId.Value,record.ImageUsn);
+        if(stored.CanReuse(image)){reason="imagem idêntica confirmada por identidade NTFS/USN";return true;}
+        reason="identidade do arquivo de imagem mudou desde a última preparação";
+        return false;
+    }
+    static void SaveSourceImageIdentity(string dest,string source,FileSnapshot image)
+    {
+        var record=new SourceImageIdentity
+        {
+            Origin=source,
+            ImageLength=image.Length,
+            ImageLastWriteUtcTicks=image.LastWriteUtcTicks,
+            ImageCreationUtcTicks=image.CreationUtcTicks,
+            ImageVolumeSerialNumber=image.VolumeSerialNumber,
+            ImageFileId=image.FileId,
+            ImageUsn=image.Usn
+        };
+        record.IntegrityMac=ComputeSourceImageIdentityMac(record);
+        Save(SourceImageIdentityPath(dest),record);
+    }
+    // Same evidence idiom as VerifyForLaunch's per-entry reuse: every manifest
+    // entry must carry its own NTFS identity and the current file must match
+    // object state (length, timestamps, volume, file id, USN) exactly.
+    static bool EntryCanReuse(Entry entry,FileSnapshot? before) =>
+        entry.VolumeSerialNumber is uint reuseVolume&&entry.FileId is ulong reuseFileId&&
+        entry.LastWriteUtcTicks is long reuseWrite&&entry.CreationUtcTicks is long reuseCreation&&
+        new FileSnapshot(entry.Length,reuseWrite,reuseCreation,reuseVolume,reuseFileId,entry.Usn).CanReuse(before);
+    internal static int PreferredConcurrency()
+    {
+        string? configured=Environment.GetEnvironmentVariable("DEMONS_SOULS_PREP_CONCURRENCY");
+        return configured is not null&&int.TryParse(configured,System.Globalization.CultureInfo.InvariantCulture,out int parsed)&&parsed>0
+            ?Math.Clamp(parsed,1,16)
+            :Math.Clamp(Environment.ProcessorCount,1,8);
+    }
+    // Bounded worker pool for independent per-file hashing: up to `degree`
+    // workers pull the next index; the first failure stops scheduling and is
+    // rethrown once in-flight items finish (cancellation propagates the same
+    // way, as System.OperationCanceledException is an ordinary failure here).
+    internal sealed class RunBoundedState
+    {
+        public volatile bool Failed;
+        public Exception? FirstError;
+    }
+    internal static async Task RunBounded<T>(IReadOnlyList<T> items,int degree,Func<T,Task> action)
+    {
+        if(items.Count==0)return;
+        degree=Math.Max(1,Math.Min(degree,items.Count));
+        var state=new RunBoundedState();
+        int next=0;
+        async Task WorkerAsync()
+        {
+            while(!state.Failed)
+            {
+                int index=Interlocked.Increment(ref next)-1;
+                if(index>=items.Count)return;
+                try{await action(items[index]).ConfigureAwait(false);}
+                catch(Exception error)
+                {
+                    Volatile.Write(ref state.FirstError,error);
+                    state.Failed=true;
+                    return;
+                }
+            }
+        }
+        var workers=new Task[degree];
+        for(int i=0;i<degree;i++)workers[i]=Task.Run(WorkerAsync);
+        await Task.WhenAll(workers).ConfigureAwait(false);
+        if(state.FirstError is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(state.FirstError).Throw();
+    }
+    public static async Task Import(string selected,string destination,string elf,string runtime,IProgress<Transfer>? progress,CancellationToken ct,bool fixture=false,string? sourceImage=null)
     {
         using var lease=TakeLease(destination);
         foreach(var process in System.Diagnostics.Process.GetProcessesByName("des_boot"))
@@ -1301,9 +1509,9 @@ public static class Installation
             using(process){string? path=null;try{path=process.MainModule?.FileName;}catch{throw new IOException("Não foi possível confirmar se o jogo está em uso. Feche-o antes de reparar.");}
                 if(path!=null&&Full(path).Equals(Full(System.IO.Path.Combine(destination,"runtime/des_boot.exe")),StringComparison.OrdinalIgnoreCase))throw new IOException("Feche o jogo desta instalação antes de importar/reparar recursos.");}
         }
-        await ImportCore(selected,destination,elf,runtime,progress,ct,fixture);
+        await ImportCore(selected,destination,elf,runtime,progress,ct,fixture,sourceImage);
     }
-    static async Task ImportCore(string selected,string destination,string elf,string runtime,IProgress<Transfer>? progress,CancellationToken ct,bool fixture)
+    static async Task ImportCore(string selected,string destination,string elf,string runtime,IProgress<Transfer>? progress,CancellationToken ct,bool fixture,string? sourceImage=null)
     {
         // The GUI passes the Advanced fields' contents straight into the
         // import; an empty path used to surface as ArgumentException("path")
@@ -1354,17 +1562,45 @@ public static class Installation
             Save(state,plan);
             planPhase?.Complete();
         }
+        FileSnapshot? imageSnapshot=string.IsNullOrWhiteSpace(sourceImage)?null:ReadFileSnapshot(sourceImage);
+        var savedIdentity=LoadSourceImageIdentity(dest);
+        bool sourceReuse=IsSourceImageIdentityTrusted(savedIdentity,source,imageSnapshot,out string identityReason)&&
+            old is not null&&old.Complete;
+        OperationTrace.RecordDecision(sourceReuse?"source_hash_confirmed_by_image_identity":"source_hash_required",
+            sourceReuse?"origem idêntica (arquivo da imagem com identidade NTFS/USN inalterada); hashes registrados no manifesto assinado são reutilizados sem nova leitura":
+            identityReason+(imageSnapshot is null?"; execução sem arquivo de imagem (clone de pasta ou reparo avançado)":""));
         using(var sourceHashPhase=OperationTrace.Measure("Hash SHA-256 da origem",files.Count,total))
         {
-            foreach(var e in files)
+            var pending=new List<int>();
+            var hashed=new Entry[files.Count];
+            for(int i=0;i<files.Count;i++)
             {
                 ct.ThrowIfCancellationRequested();
-                string hash=await Hash(e.Source,ct);
-                if (new FileInfo(e.Source).Length != e.Length) throw new IOException("Origem mudou durante inventário: "+e.Relative);
-                if (old!=null && old.Files[index].Sha256 != new string('0',64) && old.Files[index].Sha256 != hash) throw new IOException("Conteúdo da origem mudou desde a importação. Preserve a instalação e escolha novo destino.");
-                plan.Files[index++]=new(e.Relative,e.Length,hash); done+=e.Length;
-                progress?.Report(new("Verificando origem por SHA-256",e.Relative,done,total,0,index,files.Count));
+                var current=files[i];
+                if(sourceReuse&&old!.Files[i].Sha256.Length==64&&old.Files[i].Sha256!=new string('0',64))
+                {
+                    plan.Files[i]=new(current.Relative,current.Length,old.Files[i].Sha256);
+                    done+=current.Length; index++;
+                    OperationTrace.RecordReuse(current.Length);
+                    progress?.Report(new("Origem confirmada pela identidade da imagem",current.Relative,done,total,0,index,files.Count));
+                    continue;
+                }
+                pending.Add(i);
             }
+            long bytesRead=0;
+            await RunBounded(pending,PreferredConcurrency(),async i=>
+            {
+                var e=files[i];
+                ct.ThrowIfCancellationRequested();
+                string hash=await Hash(e.Source,ct,bytes=>Interlocked.Add(ref bytesRead,bytes)).ConfigureAwait(false);
+                if (new FileInfo(e.Source).Length != e.Length) throw new IOException("Origem mudou durante inventário: "+e.Relative);
+                if (old!=null && old.Files[i].Sha256 != new string('0',64) && old.Files[i].Sha256 != hash) throw new IOException("Conteúdo da origem mudou desde a importação. Preserve a instalação e escolha novo destino.");
+                hashed[i]=new(e.Relative,e.Length,hash);
+                Interlocked.Add(ref done,e.Length);
+                int processed=Interlocked.Increment(ref index);
+                progress?.Report(new("Verificando origem por SHA-256",e.Relative,Interlocked.Read(ref done),total,0,processed,files.Count,Interlocked.Read(ref bytesRead)));
+            });
+            foreach(int i in pending)plan.Files[i]=hashed[i];
             sourceHashPhase?.Complete();
         }
         using(var planPhase=OperationTrace.Measure("Gravação dos hashes da preparação retomável",files.Count,total))
@@ -1373,22 +1609,49 @@ public static class Installation
             planPhase?.Complete();
         }
         done=0; long copied=0; index=0;
-        long replacementBytes=0;
-        var validTargets=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validTargets=new System.Collections.Concurrent.ConcurrentDictionary<string,byte>(StringComparer.OrdinalIgnoreCase);
+        string destJournalStatus="destino sem consulta de journal USN";
+        string destStateReason="manifesto anterior ausente ou incompleto";
+        bool destTrusted=old is not null&&old.Complete&&
+            IsManifestSnapshotTrusted(dest,old,ReadUsnJournalId(dest,out destJournalStatus),out destStateReason);
+        OperationTrace.RecordDecision("usn_journal",destJournalStatus);
+        OperationTrace.RecordDecision(destTrusted?"destination_check_confirmed_by_ntfs_identity":"destination_check_requires_hash",
+            destTrusted?"manifesto assinado e journal USN do destino validados; arquivos inalterados não são relidos":
+            (old?.Complete is not true?"manifesto anterior ausente ou incompleto: hash integral do destino":"estado do snapshot não confiável: hash integral do destino ("+destStateReason+")"));
         using(var targetCheck=OperationTrace.Measure("Hash SHA-256 do destino para retomada",plan.Files.Count,total))
         {
-            foreach(var e in plan.Files)
+            var pending=new List<int>();
+            for(int i=0;i<plan.Files.Count;i++)
             {
-                ct.ThrowIfCancellationRequested();string target=Child(dest,e.Path);
-                if(File.Exists(target)&&new FileInfo(target).Length==e.Length&&
-                   string.Equals(await Hash(target,ct),e.Sha256,StringComparison.OrdinalIgnoreCase))
-                    validTargets.Add(e.Path);
-                else replacementBytes=checked(replacementBytes+e.Length);
-                done+=e.Length;index++;
-                progress?.Report(new("Verificando arquivos existentes para retomar",e.Path,done,total,0,index,plan.Files.Count));
+                ct.ThrowIfCancellationRequested();
+                var e=plan.Files[i];string target=Child(dest,e.Path);
+                if(destTrusted&&e.Sha256.Length==64&&e.Sha256!=new string('0',64)&&EntryCanReuse(old!.Files[i],ReadFileSnapshot(target)))
+                {
+                    validTargets[e.Path]=1;
+                    OperationTrace.RecordReuse(e.Length);
+                    done+=e.Length;index++;
+                    progress?.Report(new("Arquivo confirmado pela identidade NTFS do manifesto",e.Path,done,total,0,index,plan.Files.Count));
+                    continue;
+                }
+                pending.Add(i);
             }
+            long bytesRead=0;
+            await RunBounded(pending,PreferredConcurrency(),async i=>
+            {
+                var e=plan.Files[i];string target=Child(dest,e.Path);
+                ct.ThrowIfCancellationRequested();
+                if(File.Exists(target)&&new FileInfo(target).Length==e.Length&&
+                   string.Equals(await Hash(target,ct,count=>Interlocked.Add(ref bytesRead,count)).ConfigureAwait(false),e.Sha256,StringComparison.OrdinalIgnoreCase))
+                    validTargets[e.Path]=1;
+                Interlocked.Add(ref done,e.Length);
+                int processed=Interlocked.Increment(ref index);
+                progress?.Report(new("Verificando arquivos existentes para retomar",e.Path,Interlocked.Read(ref done),total,0,processed,plan.Files.Count,Interlocked.Read(ref bytesRead)));
+            });
             targetCheck?.Complete();
         }
+        long confirmedBytes=0;
+        foreach(var entry in plan.Files)if(validTargets.ContainsKey(entry.Path))confirmedBytes+=entry.Length;
+        long replacementBytes=checked(total-confirmedBytes);
         CheckSpace(drive.AvailableFreeSpace,checked(replacementBytes+reserve));
         done=0;index=0;
         using(var copyPhase=OperationTrace.Measure("Cópia, flush durável, fechamento e SHA-256 temporário",plan.Files.Count,total))
@@ -1397,24 +1660,33 @@ public static class Installation
             {
                 ct.ThrowIfCancellationRequested(); var origin=files[index].Source; string target=Child(dest,e.Path);
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
-                if (validTargets.Contains(e.Path))
+                if (validTargets.ContainsKey(e.Path))
                 {
                     done+=e.Length; index++; progress?.Report(new("Reutilizando arquivo verificado",e.Path,done,total,copied,index,files.Count)); continue;
                 }
                 string partial=target+".partial"; NoLinks(partial);
+                string partialHash;
                 using (var input=new FileStream(origin,FileMode.Open,FileAccess.Read,FileShare.Read,1024*1024,true))
                 using (var output=new FileStream(partial,FileMode.Create,FileAccess.Write,FileShare.None,1024*1024,true))
+                using (var inFlight=IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
                 {
+                    // SHA-256 computed in flight while the copy is written: the
+                    // same content that was flushed is hashed, avoiding a full
+                    // re-read of the temporary file. Same idiom as the VFS
+                    // profile copy phase.
                     byte[] buffer=new byte[1024*1024]; int n;
                     while((n=await input.ReadAsync(buffer,ct))>0)
                     {
+                        inFlight.AppendData(buffer,0,n);
                         await output.WriteAsync(buffer.AsMemory(0,n),ct); copied+=n;
                         progress?.Report(new("Copiando arquivos",e.Path,done+output.Position,total,copied,index,files.Count));
                     }
                     await output.FlushAsync(ct); output.Flush(true);
+                    partialHash=Convert.ToHexString(inFlight.GetHashAndReset());
+                    OperationTrace.RecordHash(e.Length);
                 }
                 ct.ThrowIfCancellationRequested();
-                if(new FileInfo(partial).Length!=e.Length || await Hash(partial,ct)!=e.Sha256) throw new IOException($"Integridade falhou; temporário preservado: {e.Path} ({new FileInfo(partial).Length}/{e.Length} bytes)");
+                if(new FileInfo(partial).Length!=e.Length || partialHash!=e.Sha256) throw new IOException($"Integridade falhou; temporário preservado: {e.Path} ({new FileInfo(partial).Length}/{e.Length} bytes)");
                 ct.ThrowIfCancellationRequested(); NoLinks(target);
                 if(File.Exists(target)) File.Move(target,target+".corrupt-"+Guid.NewGuid().ToString("N"));
                 File.Move(partial,target); done+=e.Length;
@@ -1454,6 +1726,14 @@ public static class Installation
             plan.Complete=true;
             SignManifestSnapshot(dest,plan);
             Save(state,plan);
+            if(!string.IsNullOrWhiteSpace(sourceImage)&&imageSnapshot is not null&&imageSnapshot.Usn.HasValue)
+            {
+                // Authenticates the association between this manifest and the
+                // exact origin image file for future prepares. Empty USN
+                // (non-NTFS source) provides no stability evidence, so nothing
+                // is registered.
+                SaveSourceImageIdentity(dest,source,imageSnapshot);
+            }
             finalization?.Complete();
         }
     }

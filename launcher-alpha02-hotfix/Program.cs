@@ -24,7 +24,7 @@ public static class Program
                 string source=Installation.GameRoot(Get("--source"));var files=Installation.Inventory(source);
                 Console.WriteLine(JsonSerializer.Serialize(new{source,files=files.Count,bytes=files.Sum(e=>e.Length),sfo=Installation.Sfo(Path.Combine(source,"PARAM.SFO"))},Installation.Json));break;
             case "--import":
-                await Installation.Import(Get("--source"),Get("--destination"),Get("--elf"),Get("--runtime"),progress,cancellation.Token);break;
+                await Installation.Import(Get("--source"),Get("--destination"),Get("--elf"),Get("--runtime"),progress,cancellation.Token,false,RequireSourceImage(args,Get));break;
             case "--verify":await Installation.Verify(Get("--destination"),progress,cancellation.Token);break;
             case "--self-test":await SelfTest.Run();break;
             case "--fps-compatibility":
@@ -227,6 +227,21 @@ public static class Program
             }
         }
         throw new DirectoryNotFoundException("O runtime não gravou a pasta de execução (tests/run-*); procurado em "+string.Join(" e em ",candidates)+". Confirme que o executável iniciou normalmente antes deste teste.");
+    }
+    // Optional --source-image: absent means "no image identity"; present but
+    // nonexistent fails loudly, because the shell wrapper may have mangled
+    // paths with spaces and a silent downgrade would hide the identity
+    // reuse behind a full re-hash with no visible reason.
+    internal static string? RequireSourceImage(string[] args,Func<string,string?,string> get)
+    {
+        string? provided;
+        int i=Array.IndexOf(args,"--source-image");
+        if(i<0)return null;
+        provided=i+1<args.Length?args[i+1]:throw new ArgumentException("Argumento necessário: --source-image");
+        if(string.IsNullOrWhiteSpace(provided))return null;
+        if(!File.Exists(provided.Trim()))
+            throw new FileNotFoundException("--source-image precisa apontar para a imagem realmente usada como origem; o arquivo não existe em disco: "+provided,provided);
+        return provided.Trim();
     }
     sealed class DirectProgress(Action<Transfer> action):IProgress<Transfer>{public void Report(Transfer p)=>action(p);}
 }
