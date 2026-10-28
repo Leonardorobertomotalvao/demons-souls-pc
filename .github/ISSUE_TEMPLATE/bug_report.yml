@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a problem with the launcher or the runtime (alpha software — thank you for testing)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing this experimental fan port. Please fill in the details below.
+        Reminder: never attach or link game files, firmware, keys, dumps or saves — logs and JSON output from the launcher are fine.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, including the launcher buttons or CLI arguments used.
+      placeholder: |
+        1. Open Launcher\DemonsSouls.Launcher.exe
+        2. Select ISO...
+        3. Click PREPARE
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What you expected to happen, and what actually happened.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Launcher (GUI)
+        - Launcher (CLI)
+        - Runtime (des_boot.exe)
+        - Build from source
+        - Documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: windows-version
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU / driver
+      placeholder: e.g. RX 6600, Adrenalin 24.x
+  - type: input
+    id: launcher-version
+    attributes:
+      label: Launcher version
+      description: The release you downloaded, e.g. v0.2.1-alpha.1
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: |
+        Relevant excerpts from %LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\ (launcher.log, operations\*.jsonl),
+        or CLI JSON output. Redact nothing personal — the launcher does not log personal data,
+        but check before pasting.
+  - type: checkboxes
+    id: attestations
+    attributes:
+      label: Attestations
+      options:
+        - label: I am using my own legally-obtained copy of the game
+          required: true
+        - label: I have not attached or linked game files, firmware, keys, dumps or saves
+          required: true
+        - label: I ran the launcher self-test (--self-test) or will do so on request

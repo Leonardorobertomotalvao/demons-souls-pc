@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <!-- Ilustração decorativa original: arcos e luzes do Nexus (abstrato).
+       Arte desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <radialGradient id="heart" cx=".5" cy=".46" r=".6">
+      <stop offset="0" stop-color="#cfe0ff" stop-opacity=".30"/>
+      <stop offset=".6" stop-color="#9fb8e6" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2a46"/>
+      <stop offset="1" stop-color="#0b101d"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="#060a12"/>
+  <rect width="800" height="500" fill="url(#heart)"/>
+
+  <!-- arcos góticos recorrentes -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M120 470 L120 190 Q240 84 360 190 L360 470" stroke="#46587c" stroke-width="3"/>
+    <path d="M220 470 L220 232 Q320 148 420 232 L420 470" stroke="#3a4c74" stroke-width="2.4" opacity=".85"/>
+    <path d="M300 470 L300 268 Q380 202 460 268 L460 470" stroke="#31405f" stroke-width="2" opacity=".7"/>
+    <path d="M560 470 L560 176 Q690 60 812 176 L812 470" stroke="#46587c" stroke-width="3"/>
+    <path d="M648 470 L648 236 Q756 144 864 236 L864 470" stroke="#3a4c74" stroke-width="2.4" opacity=".85"/>
+  </g>
+
+  <!-- colunas -->
+  <g fill="url(#col)">
+    <rect x="108" y="188" width="18" height="282"/>
+    <rect x="354" y="188" width="18" height="282"/>
+    <rect x="552" y="174" width="18" height="296"/>
+    <rect x="798" y="174" width="18" height="296"/>
+  </g>
+
+  <!-- luzes suspensas ("almas") -->
+  <g>
+    <circle cx="240" cy="150" r="12" fill="#cfe0ff" opacity=".14"/>
+    <circle cx="240" cy="150" r="3.4" fill="#dce8ff" opacity=".92"/>
+    <line x1="240" y1="0" x2="240" y2="146" stroke="#2b3a5c" stroke-width="1"/>
+    <circle cx="500" cy="120" r="12" fill="#cfe0ff" opacity=".13"/>
+    <circle cx="500" cy="120" r="3" fill="#dce8ff" opacity=".9"/>
+    <line x1="500" y1="0" x2="500" y2="116" stroke="#2b3a5c" stroke-width="1"/>
+    <circle cx="700" cy="180" r="10" fill="#cfe0ff" opacity=".12"/>
+    <circle cx="700" cy="180" r="2.6" fill="#dce8ff" opacity=".8"/>
+    <line x1="700" y1="0" x2="700" y2="176" stroke="#2b3a5c" stroke-width="1"/>
+  </g>
+
+  <!-- chão: lajotas em perspectiva -->
+  <g stroke="#2b3a5c" stroke-width="1" opacity=".55">
+    <line x1="0" y1="470" x2="800" y2="470"/>
+    <line x1="0" y1="492" x2="800" y2="492"/>
+    <line x1="90" y1="470" x2="40" y2="500"/>
+    <line x1="260" y1="470" x2="230" y2="500"/>
+    <line x1="430" y1="470" x2="420" y2="500"/>
+    <line x1="600" y1="470" x2="610" y2="500"/>
+    <line x1="740" y1="470" x2="790" y2="500"/>
+  </g>
+
+  <!-- névoa rasteira -->
+  <ellipse cx="400" cy="478" rx="440" ry="40" fill="#9fb8e6" opacity=".08"/>
+</svg>

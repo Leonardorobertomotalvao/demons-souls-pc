@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an improvement to the port or launcher
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is an alpha-stage project with a deliberately small scope: native static recompilation
+        of Demon's Souls for Windows x64, plus a launcher. Feature requests should fit that scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and what stands in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to happen. Small, concrete proposals are easier to adopt.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: involvement
+    attributes:
+      label: Involvement
+      options:
+        - label: I am willing to help test this
+        - label: I am willing to help implement this (small, tested, reversible PRs)

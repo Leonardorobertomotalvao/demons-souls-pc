@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- sigilo original do projeto: anel de pedra + losango espectral -->
+  <rect width="64" height="64" rx="12" fill="#0b0f1a"/>
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#54617c" stroke-width="2"/>
+  <circle cx="32" cy="32" r="17" fill="none" stroke="#3a4763" stroke-width="1"/>
+  <path d="M32 14 L44 32 L32 50 L20 32 Z" fill="none" stroke="#8fb4ea" stroke-width="2.4"/>
+  <path d="M32 22 L38 32 L32 42 L26 32 Z" fill="#8fb4ea" opacity=".85"/>
+  <circle cx="32" cy="32" r="3.4" fill="#c3d9fb"/>
+</svg>

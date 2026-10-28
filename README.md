@@ -1,325 +1,204 @@
-# Demon's Souls PC — recompilação estática nativa para Windows x64
+English | [Português (BR)](README.pt-BR.md)
 
-**Porte experimental "Demon's Souls PC" (Alpha 0.2).** Tradução estática (*static recompilation*) de *Demon's Souls* (PS3, América do Norte, BLUS30443) para Windows x64: o código PowerPC/SPU do jogo é convertido para C antecipadamente (AOT), compilado e ligado a uma reimplementação (clean-room) das bibliotecas de sistema do PS3. Renderização via Direct3D 12, áudio via WASAPI, launcher em WPF/.NET 8 para instalação, verificação de integridade e inicialização.
+# Demon's Souls PC — native static recompilation for Windows x64
 
-> **Este repositório não contém código do jogo, dados do jogo, saves, firmware, BIOS, chaves ou executáveis do jogo.** Vocês precisa da sua própria cópia legal. Veja [Licenciamento e avisos](#17-licenciamento-e-avisos).
+**An unofficial, experimental native Windows port of *Demon's Souls* (PS3 North America, BLUS30443), built with static recompilation.** The game's PowerPC/SPU machine code is translated ahead-of-time to C, compiled to a native x64 executable, and linked against hand-written clean-room reimplementations of the PS3 system libraries — no general-purpose emulation at runtime. Rendering uses Direct3D 12, audio uses WASAPI, and a WPF/.NET 8 launcher handles managed installation, SHA-256 integrity verification, and startup.
+
+This project is for people who own a legal copy of the game and want to play it natively on a modern Windows PC. It is **not** an emulator and ships **no game content**: you supply the game files yourself, from your own copy.
+
+[![Release](https://img.shields.io/github/v/release/Leonardorobertomotalvao/demons-souls-pc)](https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest)
+[![Status](https://img.shields.io/badge/status-alpha--experimental-orange)](#status--roadmap)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Leonardorobertomotalvao/demons-souls-pc)](https://github.com/Leonardorobertomotalvao/demons-souls-pc/stargazers)
+[![Issues](https://img.shields.io/github/issues/Leonardorobertomotalvao/demons-souls-pc)](https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue)](#requirements)
+
+> **This repository contains no game code, game data, saves, firmware, BIOS, keys, or game executables.** You must supply your own legally-obtained copy. See [Legal disclaimer](#legal-disclaimer).
 >
-> **Histórico de versões do launcher**: [CHANGELOG.md](CHANGELOG.md).
+> **Launcher version history:** [CHANGELOG.md](CHANGELOG.md).
 
----
+## Features
 
-## 1. O que é este projeto
+All items below were **verified on one single reference machine** (the author's Windows 10 box — Ryzen 5 5500, 16 GB RAM, HDD). Nothing transfers automatically to other machines; see [Status / Roadmap](#status--roadmap).
 
-Um fan port pela técnica de recompilação estática, no modelo de *Zelda 64 Recompiled* e *Unleashed Recompiled*: em vez de emular o console em tempo real, o executável do jogo (decriptado localmente pelo usuário) é traduzido uma única vez para código nativo x64, resultando em `des_boot.exe`, um executável Windows que roda o jogo em até 60 FPS com baixa latência. As bibliotecas do PS3 (cellAudio, cellAtrac, camera, input, SPURS/lv2 etc.) são reimplementadas à mão. O launcher Windows prepara a cópia do jogo dentro de uma instalação gerenciada, valida identidades SHA-256 do runtime e do EBOOT e inicia o jogo — sem emulação general-purpose em tempo de execução.
+- **Full boot up to Boletaria**: logos, auto-save notice, intro with sound and subtitles, title screen, character creation, tutorial, the Nexus, and Boletarian Palace 1-1.
+- **D3D12 rendering**: lit/textured scenes, shadows, HUD, particles, light shafts and haze; shaders are precompiled (the game does not pause to compile shaders).
+- **Save/load works**, including menu sounds.
+- **60 FPS runtime profile**, approved via runtime identity verification. On the reference machine, 1-1 with `DES_FPS=60` and `VBLANK_MHZ=240000` measured ~120 FPS — not a general claim.
+- **Startup audio-silence bug fixed at the root**: a libmixer notify-queue race, documented in `docs/34-audio-notify-startup-race.md`, fixed by `patches/des-audio-notify-fix.patch`, validated by A/B runs (PCM reaches WASAPI with the fix ON and does not with it OFF; 3752/3752 and 8442/8442 notifications across two test sets) and audibly validated by the author on an isolated installation.
+- **Launcher (Alpha 0.2)**: imports/prepares/repairs a managed installation from your local ISO or `PS3_GAME` copy, enforces identity gates (unapproved runtimes are blocked), records every operation as JSONL traces. On an intact installation, full verify takes ~4 s reading **0 bytes** (NTFS/USN identity confirmation); re-preparing from the same ISO takes ~9 s.
+- **Architecture**: complete PPU boot, recompiled SPU code images, SPURS HLE with task coordination, cellAudio/cellAtrac/cellFs/camera/input reimplementations, in-game UI via RmlUi.
 
-Construído sobre [ps3recomp](https://github.com/sp00nznet/ps3recomp) (MIT) e o fork [JonathanDC64/ps3recomp](https://github.com/JonathanDC64/ps3recomp); as contribuições deste projeto são os patches em `patches/` e a camada de porte em `port/`.
+## Status / Roadmap
 
-## 2. Objetivo
+**Current state: Alpha 0.2 — experimental prototype.** Validated on one reference machine only. There are no guarantees about stability, performance, or compatibility on any other machine.
 
-1. Preservar *Demon's Souls* em PC nativo, sem depender de emulação em tempo real.
-2. Rodar o jogo a 60 FPS (e além, em regime experimental) respeitando a mecânica original de 30 FPS.
-3. Corrigir defeitos conhecidos — áudio, controles, menu — com mudanças pequenas, testadas e reversíveis.
-4. Manter o projeto estritamente legal: nenhum material derivado do jogo é publicado; o usuário fornece a própria cópia.
+**In development** (open items):
 
-## 3. Estado atual (2026-10-22) — Alpha 0.2, **experimental**
+- Transparency effects that vanish for single frames (fog wall, soul aura, snow).
+- Cutscene handling above 30 Hz.
+- Physics validation above 60 FPS.
+- More controllers (keyboard+mouse and DualSense USB/BT-HID are what have been touched; other pads untested).
+- Persistent user configuration.
 
-Nível de maturidade: **protótipo funcional, validado em uma máquina de referência única (Windows 10, computador do autor).** Nada abaixo pode ser assumido para outras máquinas.
+**Not implemented / known limits:**
 
-### 3.1 Comprovadamente testado (máquina de referência)
+- Online/network: nothing implemented.
+- Only the first area is verified — the rest of the game is untested.
+- Full SPURS/SPU LLE: an earlier experiment was abandoned (`docs/22-libsre-lle-attempt.md`); the runtime uses HLE plus recompiled SPU images.
+- Cutscenes revert to 30 Hz above 30; physics > 60 FPS untested (the original game runs at 30).
 
-- **Inicialização completa até Boletaria**: logos, auto-save, abertura com som e legendas, tela-título, criação de personagem, tutorial, Nexus e Palácio Boletariano 1-1.
-- **Renderização D3D12**: cena iluminada, sombras, HUD, partículas, *light shafts* e haze; shaders pré-compilados (o jogo não pausa para compilar shader).
-- **Save/load funcionando**, incluindo sons de menu.
-- **60 FPS**: perfil aprovado por verificação de identidade do runtime; em 1-1, com `DES_FPS=60` e `VBLANK_MHZ=240000`, chegaram a medir ~120 FPS **nessa máquina específica** — não é promessa para outras configurações.
-- **Correção do bug de silêncio total de áudio na inicialização**: causa raiz documentada (corrida da fila de eventos do libmixer) e correção publicada em `patches/des-audio-notify-fix.patch`; validada automaticamente por A/B (o PCM chega ao WASAPI com o fix ligado e não chega desligado; 3752/3752 e 8442/8442 notificações em dois conjuntos de testes; detalhes em `docs/34`) **e auditivamente pelo autor em 2026-10-22, numa instalação isolada** (runtime `83B238…`).
-- **Launcher Alpha 0.2**: compila, abre, importa/repara instalações, aplica gates de identidade (bloqueia runtime não aprovado) e registra as operações da GUI em trace JSONL (a CLI `--import` atualmente não grava trace — limitação documentada em `docs/35`; as decisões estão nas medições JSON de stdout).
-- **Otimização da preparação do jogo (26-10-2026, `docs/35`)**: preparação/verificação sobre uma instalação íntegra lê **0 bytes** do destino (confirmação por identidade NTFS/USN do journal) e, quando a origem é a ISO com identidade já registrada, **0 bytes da origem também** (registro assinado `installation-source.json`); medições: integridade completa em **4,0 s** (antes: falha por validadores), reparo de um arquivo em **16,1 s** (antes: 413 s) e re-preparação completa em **9,1 s** (antes: 413–423 s). Os validadores passaram a aceitar artefatos runtime legítimos (`.arealoadlist` do patch 60 FPS e buckets vazios de cache) sem afrouxar a detecção de divergência real.
+Project history and technical chronicle: `docs/00-feasibility.md` through `docs/35-launcher-prepare-optimization.md`.
 
-### 3.2 Passou em teste técnico; falta validação em outras máquinas
+## Requirements
 
-- Compilação/execução do launcher e runtime em máquinas de build diferentes da do autor.
-- Áudio em outros dispositivos/saídas (o teste auditivo cobre o setup WASAPI do autor apenas).
-- Controles além de teclado+mouse e DualSense (USB/Bluetooth-HID): não testados.
-- FPS em outras GPUs/drivers.
+### To play (prebuilt launcher package)
 
-### 3.3 Experimental / não aprovado
+- Windows 10/11 x64; a GPU with D3D12 feature level 12.0+.
+- The self-contained launcher package from [Releases](https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest) — no .NET install needed.
+- **Your own legal copy of the game** (PS3 USA, BLUS30443), and a decrypted `EBOOT.ELF` produced **from your own copy** — e.g. the executable dump feature of RPCS3, or `scetool` with public keys. The project never decrypts anything for you and never ships decryption.
+- Disk space for the managed installation (a copy of the game data plus vfs and profile).
 
-- Desempenho total, em qualquer máquina, prometido. **Não há garantias.**
-- Jogo além da área inicial (resto do jogo não testado).
-- Online/rede: não implementado.
-- LLE completo de SPURS/SPU: abandonado após experimento (`docs/22`); runtime usa HLE + imagens SPU recompiladas.
+### To build from source
 
-## 4. Recursos implementados e em desenvolvimento
-
-**Implementado** (ver `docs/28-in-game.md` para o inventário mais preciso): boot PPU completo, pipeline de imagens SPU recompiladas (LIBSRE), SPURS HLE com coordenação de tarefas, cellAudio/cellAtrac/cellFs/camera/input, D3D12 com fila RSX e predição PSO, UI overlay própria (RmlUi) para opções/menùs, launcher com import/repair/gates/tracing.
-
-**Em desenvolvimento**: transparências que desaparecem em frames únicos (muro-fog, aura de alma, neve), gerenciador de cutscenes > 30 Hz, física > 60 FPS, mais controles, config persistente do usuário.
-
-## 5. Arquitetura
-
-```
-(uma vez, pelo usuário)                     (reprocomp)
-EBOOT.BIN do jogo (SELF) ──RPCS3/scetool──▶ EBOOT.ELF decriptado (PowerPC, big-endian)
-                                                   │
-                                                   ▼
-                      ps3recomp upstream + patches/des-audio-notify-fix.patch
-                      (PPU/SPU → C AOT, extração de imagens SPU, importação de NIDs)
-                                                   │
-                                                   ▼
-                              runtime nativo des_boot.exe (x64)
-                      libs PS3 reimplementadas + port/ (UI, heap, menu SFX, stubs)
-                                                   ▲
-                                                   │ lançamento validado (SHA-256)
-                              launcher DemonsSouls.Launcher.exe (WPF/.NET 8)
-                      PREPARAR/REPARAR → vfs/PS3_GAME + runtime/EBOOT.ELF + EXE
-                      installation.json (manifesto SHA) + OperationTrace JSONL
-```
-
-- **Só código próprio + tooling** entra no repo. `ps3recomp` não é distribuído aqui; o patch de áudio se aplica no fork upstream no commit `add3cac07e29b4457ab24303804bfcc96056ba5a`.
-- **port/**: camada do porte — CMake/`EmbedFiles`, UI RmlUi diretamente no jogo (fontes OFL/Apache incluídas com licenças), heap, menu-sfx, opÃ§Ãµes, stubs.
-- **launcher-alpha02-hotfix/**: launcher completo — `Installation.cs` (import, manifesto), `RuntimeService.cs` (gates/60 FPS), `OperationTrace.cs`, `VfsPolicy.cs`/`VfsPolicyTest.cs`, `SelfTest.cs`, `NativeStart.cs`, `Program.cs` (CLI reprodutível).
-- **Integração launcher↔runtime**: diretório de instalação gerenciada com `installation.json`; perfil de dados `%LOCALAPPDATA%\DemonsSoulsPCLauncher` ou `DEMONS_SOULS_LAUNCHER_HOME` para home isolada; variáveis `DES_*` são limpas na inicialização do runtime.
-
-## 6. Estrutura de pastas
-
-| Pasta | Função |
-|---|---|
-| `docs/` | Documentação técnica crônica (00–35): setup, análise, boot, SPURS/SPU, legal, launcher, áudio, otimização da preparação (35) |
-| `launcher-alpha02-hotfix/` | Fonte do launcher Windows atual (WPF/.NET 8, self-contained) — preparação com confirmação por identidade NTFS/USN e reuso de origem assinado |
-| `launcher/` | Fonte do launcher original (legado; o atual é o `hotfix`) |
-| `port/` | Camada do porte: CMake, UI RmlUi (fontes OFL/Apache com licenças), heap, menu SFX, options, stubs |
-| `patches/` | Patch do fix de áudio sobre o `ps3recomp` upstream |
-| `scripts/` | Build/análise/diagnóstico: `build_libsre.sh`, `build_spu.py`, `apply_boot_patches.py`, `audio-ab-diagnostic.ps1`, `vsenv.bat` etc. |
-| `tools/` | Ferramentas de análise/depuração (Ghidra, profilers, shaders, SPU trace) |
-
-Diretórios locais e reaproveitados fora do Git (nunca publicados): `work/` (arquivos de jogo + C transliterado), `releases/`, `backups/`, `cache/`, `build-logs/`, `recovery/`, `PS3_GAME/`.
-
-## 7. Requisitos
-
-### Para jogar (pacote do launcher pré-compilado)
-- Windows 10/11 x64; GPU com D3D12 FL 12.0+.
-- Pacote do launcher self-contained (não precisa instalar .NET).
-- Sua cópia legal do jogo (PS3 USA) devidamente decriptada — o launcher exige `EBOOT.ELF` e `des_boot.exe` com identidades aprovadas.
-- Espaço em disco para a instalação gerenciada (cópia do jogo + vfs + perfil).
-
-### Para desenvolver
-- Windows 10/11 x64; VS 2022 BuildTools (C++ + Win SDK com `d3d12.h`), CMake ≥ 3.20, Ninja, clang conforme o fork.
-- Python 3.11+ com `ps3recomp/requirements.txt` (pycryptodome, capstone, construct, tabulate, tqdm) para o tooling de análise.
+- Windows 10/11 x64; VS 2022 Build Tools (C++ + Windows SDK with `d3d12.h`), CMake ≥ 3.20, Ninja, and the clang used by the fork.
+- Python 3.11+ with `ps3recomp/requirements.txt` (pycryptodome, capstone, construct, tabulate, tqdm) for the analysis tooling.
 - .NET SDK 8 (launcher).
-- RPCS3 (ou scetool com chaves públicas lv0/metldr) para decriptar **a sua própria cópia** — o projeto não distribui decriptação nem chaves.
-- Ghidra opcional (análise).
+- RPCS3 (or scetool with public lv0/metldr keys) to decrypt **your own copy** — the project distributes no decryption and no keys.
+- Ghidra optional (analysis).
 
-## 8. Preparação legal dos arquivos — essência
+## Installation
 
-O usuário fornece: (1) cópia legal do jogo; (2) `EBOOT.ELF` **decriptado** — via recomendada: RPCS3 com a sua cópia, ativando o dump do executável; alternativa: `scetool` com chaves públicas sobre a sua cópia. A decriptação é feita **localmente, na sua máquina, para interoperabilidade**; chaves, dumps e assets nunca são comitados, publicados ou compartilhados. Sua pasta `PS3_GAME` (USRDIR, PARAM.SFO, EBOOT.BIN original) nunca sai do seu computador; o launcher só copia internamente para a instalação gerenciada.
+### End users (prebuilt launcher)
 
-## 9. Compilando passo a passo
+1. Download `DemonSoulsPC-Launcher-Windows-x64-<version>.zip` from [Releases](https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest) and extract the **whole** zip into a writable folder, keeping the `Launcher\` folder together.
+2. Run `Launcher\DemonsSouls.Launcher.exe`.
+3. **SELECT LOCAL ISO** — the launcher mounts your game image read-only, identifies the edition by `PARAM.SFO` (BLUS30443 · 01.00), and fills the source path. If Windows refuses the mount, double-click the ISO in Explorer and try again.
+4. You must also supply: an **approved** `des_boot.exe` runtime and the `EBOOT.ELF` from your own decrypted copy (recommended route: RPCS3's executable dump). The launcher does **not** decrypt protected `EBOOT.BIN` files; without an approved ELF identity, PLAY stays locked.
+5. Click **PREPARE** (or **REPAIR**) — it copies and verifies everything into a managed installation (resumable by SHA-256; your original `PS3_GAME` folder is never modified).
+6. Under **Advanced**, confirm the paths, pick 60 FPS, and click **PLAY** — every start verifies the runtime and EBOOT SHA-256 before releasing the button.
+7. For isolated testing, set `DEMONS_SOULS_LAUNCHER_HOME` to a scratch folder. The launcher never touches its own preferences.
 
-### 9.1 Launcher
+### From source
+
+The launcher has a single reproducible build:
+
 ```powershell
-git clone <este repo> demons-souls-pc && cd demons-souls-pc
+git clone https://github.com/Leonardorobertomotalvao/demons-souls-pc demons-souls-pc
+cd demons-souls-pc
 dotnet publish launcher-alpha02-hotfix\DemonsSouls.Launcher.csproj -c Release -r win-x64 --self-contained true -o ..\launcher-build
-# → ..\launcher-build\DemonsSouls.Launcher.exe (inclui gate de identidade e CLI)
+# → ..\launcher-build\DemonsSouls.Launcher.exe
 ```
 
-### 9.2 Runtime (ps3recomp + patch + port)
-```
-1. git clone https://github.com/JonathanDC64/ps3recomp
-   git -C ps3recomp checkout add3cac07e29b4457ab24303804bfcc96056ba5a
-   git -C ps3recomp apply <repo>\patches\des-audio-notify-fix.patch
-2. Configure o ambiente MSVC (vcvars64) — scripts/vsenv.bat
-3. Coloque seu jogo decriptado em work\game\ (conforme docs/03-setup.md)
-4. Configure/compile os alvos CMake (port + runtime) para x64
-5. Resultado: port\build\des_boot.exe
-```
+The runtime is **not** a one-button build: clone the [ps3recomp](https://github.com/JonathanDC64/ps3recomp) fork at commit `add3cac07e29b4457ab24303804bfcc96056ba5a`, apply `patches/des-audio-notify-fix.patch`, set up MSVC (`scripts/vsenv.bat`), place your own decrypted game files in `work\game\` (per `docs/03-setup.md`), and build the CMake targets (port + runtime) for x64 → `port\build\des_boot.exe`.
 
-**Honestidade sobre reprodutibilidade**: o launcher tem build única reproduzível (9.1). O runtime depende do fork upstream, da sua cópia legal decriptada localmente e do toolchain de análise documentado em `docs/03-setup.md`, `docs/06`, `docs/19` — **não há "um botão" build-all**. Builds em máquinas diferentes podem divergir em bytes do binário do autor; o launcher aprova por identidade SHA-256 (para rodar com a SUA build, reproduza os próprios gates da sua instalação).
+**Honesty about reproducibility:** on the author's toolchain the audio-fix build reproduces `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E` byte-exactly; other toolchains may differ in bytes. The launcher approves runtimes by identity (SHA-256) — to run your own build, reproduce your installation's own gates.
 
-### 9.3 Pacote do launcher (zip) — `scripts/make_launcher_release.ps1`
-```powershell
-# package base (sem runtime): release\DemonSoulsPC-Launcher-Windows-x64-<versão>.zip
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\make_launcher_release.ps1
-# opcional: incluir o runtime aprovado SOMENTE se o SHA-256 conferir;
-# o arquivo indicado nunca é comitado no repositório
-powershell ... -File scripts\make_launcher_release.ps1 -ApprovedRuntime "E:\caminho\des_boot.exe"
-```
-O zip traz `Launcher\` self-contained, `README.md` e `docs/03-setup.md`. Nenhum material derivado do jogo entra no pacote.
+## Usage
 
-## 10. Executando o jogo pelo launcher
+### Launcher
 
-1. Abra `DemonsSouls.Launcher.exe`.
-2. **SELECIONAR ISO LOCAL** — o launcher monta a imagem em modo somente leitura (se o Windows já a tiver montada, apenas usa a unidade), identifica a edição pelo `PARAM.SFO` (BLUS30443 · 01.00) e preenche a pasta de origem automaticamente. Se o Windows recusar a montagem, faça duplo clique na ISO no Explorador e repita.
-3. O **assistente de preparação** (aba Instalação) mostra, em tempo real, cada requisito: imagem/origem, `EBOOT.ELF` preparado, executável nativo aprovado, destino e espaço. Ele localiza candidatos válidos junto à imagem montada, no destino ou lembrados nas configurações e confere as identidades SHA-256 antes de liberar JOGAR.
-4. Sobre o `EBOOT.ELF`: o launcher **não descriptografa** a `EBOOT.BIN` protegida. Gere o ELF com o dump de executável do RPCS3 (rota recomendada, docs/03) ou instale uma ferramenta local própria (scetool, detectada pelo botão **DESCRIPTOGRAFAR EBOOT.BIN (FERRAMENTA LOCAL)**). Sem o ELF com identidade aprovada, a preparação não é declarada concluída e JOGAR permanece bloqueado.
-5. **PREPARAR / REPARAR** copia e verifica tudo (retomável por SHA-256; cancelamento seguro; a `PS3_GAME` original nunca é alterada) e, ao final, os campos passam a apontar para a cópia **instalada** do runtime e do ELF.
-6. Escolha 60 FPS e clique **JOGAR** — cada início valida SHA-256 do runtime e do EBOOT antes de liberar.
-7. Para testes, defina `DEMONS_SOULS_LAUNCHER_HOME` apontando para uma pasta isolada (não toca nas suas preferências); CLI: `--prepare-iso --iso <arquivo.iso> --destination <pasta>` (retorna 2/3/4 com o requisito exato faltando e JSON detalhado) e `--detect-tools` (diagnóstico de componentes e do ambiente de recompilação).
+Open `DemonsSouls.Launcher.exe` → the **Installation** tab wizard shows every requirement in real time (image/source, prepared `EBOOT.ELF`, approved native executable, destination, disk space) → **PREPARE / REPAIR** → **Advanced** paths → 60 FPS → **PLAY**.
 
-## 11. Verificações de integridade e identidades do runtime
+### Command line (reproducible, no GUI)
 
-O launcher recusa runtime não aprovado com "60 FPS bloqueado — Confira os caminhos em Avançado e tente novamente":
-
-| Build | SHA-256 | Status |
-|---|---|---|
-| Alpha 0.2 estável | `88087725D7CB858B644D8D183329EB72E1C820B365ED2B34EBD6E2AC281F0933` | Aprovada |
-| Alpha 0.2 com correção de áudio | `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E` | Aprovada (áudio validado auditivamente pelo autor) |
-| Qualquer outro `des_boot.exe` | — | **Bloqueado por segurança** |
-
-O `EBOOT.ELF` esperado tem identidade própria (SHA-256). O launcher também valida: manifesto da instalação (`installation.json` com SHA de cada componente importado), identidades NTFS/USN journal e DPAPI por máquina, e regista tudo em `logs\operations\*.jsonl` (com tamanho, hashes e fases da operação). Sem dados pessoais nos logs. Com o manifesto completo e o journal USN válidos, `--verify`/VERIFICAR confirma a instalação íntegra **sem reler os arquivos** (medições em `docs/35`); divergência real cai no fallback honesto de hash apenas do arquivo divergente.
-
-## 12. Diagnóstico rápido
-
-| Sintoma | Causa provável | Onde olhar |
-|---|---|---|
-| "60 FPS bloqueado" | runtime em Avançado não é build aprovada | tabela do item 11; docs/34 |
-| "A pasta escolhida precisa conter installation.json" | apontou a pasta pai | aponte a pasta do manifesto (ou faça PREPARAR) |
-| Silêncio total no boot (`[audio-peak] peak=0.0000`) | corrida do libmixer (fix incorporado desde Alpha 0.2-audiofix) | `docs/34`; A/B com `scripts/audio-ab-diagnostic.ps1` |
-| Executável nativo não corresponde ao SHA | manifest da instalação aponta runtime antigo | REPARAR com runtime aprovado |
-| Onde ficam os logs | — | `%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\` |
-| CLI reprodutível (sem janela) | — | `--fps-compatibility --installation <pasta> --profile <perfil> --runtime <exe> --elf <ELF>` → JSON com `approved`/`blocker` |
-| Preparar a partir da ISO via CLI | — | `--prepare-iso --iso <arquivo.iso> --destination <pasta> [--elf <ELF>] [--runtime <exe>]` → códigos 2/3/4 = requisito exato faltando |
-| Diagnóstico de ferramentas/ambiente | — | `--detect-tools [--destination <pasta>]` → scetool detectado, candidatos, pré-requisitos do build de fonte |
-
-## 13. Testes automatizados
-
-- `VfsPolicyTest.cs` — testes de política VFS embutidos na fonte do launcher.
-- CLI do launcher: `--fps-compatibility` (gates sem GUI), `--import`, `--prepare-iso`, `--detect-tools`, `--window-test`, etc. (ver `Program.cs`).
-- `scripts/audio-ab-diagnostic.ps1` — A/B de áudio do runtime (`DES_AUDIO_NOTIFY_FIX=0/1`), gerando perfil isolado com telemetria (`AUDIO_PEAK/RATE/GAPS`).
-- Self-test (`--self-test`) roda em clone limpo: os manifestos de coordenação locais não distribuídos viram `SKIP` quando ausentes, e as identidades aprovadas continuam verificadas pelos demais casos; novas coberturas do assistente de ISO: escada de `EBOOT.ELF` (candidatos junto à origem/destino, decoys `EBOOT.BIN/SELF` ignorados), identidade por `PARAM.SFO`, sonda de ferramenta local (nunca fabrica caminho), diagnóstico honesto do ambiente de recompilação (ps3recomp nomeado explicitamente) e rejeição por identidade de binário fictício. Coberturas novas da preparação otimizada (26-10-2026): hashing paralelo limitado com contrato de primeiro-erro (`RunBounded`), reuso da identidade da imagem de origem com fallback por adulteração do registro, confirmação USN na verificação com mutação de mesmo tamanho rejeitada e validação estrita de `--source-image` (ausente/Întegro/alto-falha).
-- Não há suíte "pytest/CT executável de fora" neste repo: os testes de análise/boot históricos são narrados em `docs/` com evidências (hashes, logs).
-
-## 14. Reproduzir a correção de áudio a partir do código
-
-1. Clone o fork `ps3recomp` no commit `add3cac07e29b4457ab24303804bfcc96056ba5a` e aplique `patches\des-audio-notify-fix.patch` (= 3 arquivos: `cellAudio.c`, `cellAtrac.c`, `ppu_hle.cpp`).
-2. Compile os alvos de runtime/port (item 9.2) → `des_boot.exe`.
-3. **Fixação**: no sistema do autor, a compilação exatamente reproduz o binário `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E`. Em outra máquina, o SHA pode diferir por toolchain; nesse caso, valide a SUA build (item 11 descreve como os gates da sua instalação se ajustam) e valide auditivamente.
-4. A/B técnico: `DES_AUDIO_NOTIFY_FIX=1` vs `0` com `scripts/audio-ab-diagnostic.ps1`; sinaliza-chave: `[audio-notify-fix]`, `[audio-peak]`, taxas de janela "silent %".
-5. **Valide auditivamente** (menu, combate, morte/respawn). Testes automáticos provam que PCM chega ao WASAPI; não provam que soa certo.
-
-## 15. Limitações conhecidas (honestas)
-
-- Projeto **NÃO OFICIAL**, protótipo de pesquisa; nenhuma garantia de estabilidade, desempenho ou compatibilidade.
-- Área de jogo testada: boot → Nexus/1-1. O restante do jogo é desconhecido/sem testes.
-- Física > 60 FPS não testada (RPCS3 a alerta); cutscenes revertem a 30 Hz acima de 30.
-- Transparências passageiras (muro de neblina, aura, fog de 1 intro) somem em frames únicos.
-- FPS alto citado (~120 em 1-1) é medição da máquina do autor; não é transferível.
-- **O fix de áudio foi validado em um setup de áudio único** (WASAPI, Windows 10 do autor). Outras placas/drivers precisam de confirmação.
-- Rede/online: nada.
-
-## 16. Contribuindo
-
-PRs bem-vindos para fontes (`port/`, `launcher-*`), patches sobre o `ps3recomp`, scripts/docs/testes. Regras:
-- **Um problema técnico por PR**; mudanças pequenas, testadas e reversíveis (ver `AGENTS.md`).
-- **Nada derivado do jogo**: `work/`, `.elf`, `.self`, `.prx`, dumps, saves, chaves, firmware, assets, screenshots/artes do jogo — absolutamente **nunca**.
-- Descreva as provas reais (ambiente, data, hashes) em cada PR; não marque como "validado" algo que não foi.
-- `docs/05-legal.md` define as regras non-negotiated; o mantenedor têm o derecho de que nada do jogo saia.
-
-## 17. Licenciamento e avisos
-
-- **Código deste project**: MIT (`LICENSE`).
-- **ps3recomp** (upstream + fork JonathanDC64): MIT.
-- **.NET 8**, RmlUi: MIT (avisos padrões). **Fontes OFL** (Alegreya Sans, Cinzel) e **Apache 2.0** (Material Symbols) em `port/ui/res/fonts/` com as licenças incluídas.
-- **Aviso de marca**: "Demon's Souls" é marca registrada da Sony Interactive Entertainment. Este projeto é um **fan port INDEPENDENTE e NÃO OFICIAL**, sem qualquer afiliação com ou produto de Sony Interactive Entertainment, FromSoftware, Atlus ou outros detentores de direitos. Nenhuma arte, logo, armadilha ou conteúdo do jogo aparece neste repositório (regra de legalidade em `docs/05-legal.md`).
-- Você é exclusivamente responsável pela sua cópia do jogo. O projeto distribui **apenas código original e ferramentas**.
-
----
-
-# Demon's Souls PC — native static recompilation for Windows x64 (ENGLISH)
-
-**Experimental native Windows x64 port of *Demon's Souls* (PS3 North America, BLUS30443) via static recompilation.** The game's PowerPC/SPU machine code is translated ahead-of-time to C, compiled, and linked against hand-written clean-room reimplementations of the PS3 system libraries. Rendering via Direct3D 12, audio via WASAPI. A WPF/.NET 8 launcher handles managed installation, SHA-256 integrity verification, and startup.
-
-> **This repository contains no game code, game data, saves, firmware, BIOS, keys, or game executables.** You must supply your own legally-obtained copy. See [License & notices](#17-license--notices-english).
-
-## 1. Status (2026-10-22) — Alpha 0.2, experimental
-
-Validated on **one single reference machine** (author's Windows 10 box). None of it transfers automatically:
-
-**Verified (reference machine):**
-
-- Full boot up to Boletaria: logos, autosave notice, intro (sound + subtitles), title screen, character creation, tutorial, the Nexus, and Boletarian Palace 1-1.
-- Lit/textured D3D12 rendering with shadows, HUD, particles, light shafts, haze; precompiled shaders.
-- Save/load works, including menu sounds.
-- 60 FPS profile approved via runtime identity verification (this machine also measured ~120 FPS in 1-1 with `DES_FPS=60 VBLANK_MHZ=240000` — not a general claim).
-- **Complete audio-silence-at-boot bug fixed**: root cause documented (libmixer notify-queue race), fix published as `patches/des-audio-notify-fix.patch`; automatically validated by A/B runs (PCM reaches WASAPI with the fix ON and does not with it OFF; 3752/3752 and 8442/8442 notifications across two test sets — details in `docs/34`) **and audibly validated by the author on 2026-10-22 on an isolated installation** (runtime `83B238…`).
-- The Alpha 0.2 launcher: builds, opens, imports/repairs managed installations, enforces identity gates (unapproved runtimes are blocked), records every operation as JSONL traces.
-
-**Not guaranteed / open:**
-
-- Nothing about FPS, sound, or stability is guaranteed on any other machine.
-- Only the first area is verified — the rest of the game is untested. Physics above 60 FPS untested; cutscenes revert to 30 Hz above 30. Some transparent effects vanish for single frames. Audio validated on ONE setup only. No online.
-
-## 2. Architecture
-
-```
-(user, once)                          (tooling)
-game EBOOT.BIN (SELF) ──RPCS3/scetool──▶ decrypted EBOOT.ELF (PowerPC64 BE)
-                                                │
-                                                ▼
-            ps3recomp upstream + patches/des-audio-notify-fix.patch
-            (PPU/SPU → AOT C, SPU image extraction, NID imports)
-                                                │
-                                                ▼
-                        native runtime des_boot.exe (x64)
-                        reimplemented PS3 libs + port/ layer
-                                                ▲
-                                                │ validated launch (SHA-256)
-            launcher DemonsSouls.Launcher.exe (WPF/.NET 8)
-            PREPARE/REPAIR → vfs/PS3_GAME + runtime/EBOOT.ELF + EXE
-            installation.json manifest + JSONL OperationTrace
+```text
+--fps-compatibility --installation <dir> --profile <p> --runtime <exe> --elf <ELF>   → JSON verdict (approved / blocker)
+--prepare-iso --iso <file.iso> --destination <dir> [--elf <ELF>] [--runtime <exe>]   → exit codes 2/3/4 name the exact missing requirement
+--verify --installation <dir>                                                        → full integrity check
+--import, --repair, --detect-tools, --self-test, --window-test
 ```
 
-Repository contents: `patches/` (our fix on the MIT-licensed upstream [ps3recomp](https://github.com/sp00nznet/ps3recomp), fork [JonathanDC64/ps3recomp](https://github.com/JonathanDC64/ps3recomp)); `port/` (CMake, RmlUi in-game UI with OFL/Apache fonts included, heap, menu SFX, stubs); `launcher-alpha02-hotfix/` (full launcher source); `launcher/` (legacy original launcher); `docs/` (35 technical documents); `scripts/` and `tools/` (build/analysis tooling). Game-derived folders (`work/`, game assets, saves) stay local and gitignored, always.
+`--prepare-iso` also accepts `--source-image` to reuse the previously registered ISO identity (seconds instead of minutes on repeat runs).
 
-## 3. Build (dev)
+### Approved runtime identities
 
-```powershell
-# launcher (single reproducible command)
-dotnet publish launcher-alpha02-hotfix\DemonsSouls.Launcher.csproj -c Release -r win-x64 --self-contained true -o ..\launcher-build
-
-# runtime: clone https://github.com/JonathanDC64/ps3recomp at commit
-# add3cac07e29b4457ab24303804bfcc96056ba5a, apply patches\des-audio-notify-fix.patch,
-# provide a locally decrypted EBOOT.ELF from your own copy (RPCS3 or scetool),
-# then build the CMake targets (see docs/03-setup.md). No one-command build-all.
-```
-
-## 4. Approved runtime identities
+The launcher refuses unapproved runtimes ("60 FPS blocked — check the paths under Advanced and try again"):
 
 | Build | SHA-256 | Status |
 |---|---|---|
 | Alpha 0.2 stable | `88087725D7CB858B644D8D183329EB72E1C820B365ED2B34EBD6E2AC281F0933` | Approved |
 | Alpha 0.2 audio fix | `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E` | Approved (audibly validated by the author) |
+| Any other `des_boot.exe` | — | **Blocked by design** |
 
-Any other `des_boot.exe` is blocked on purpose ("60 FPS blocked — check the paths under Advanced and try again").
+### Diagnostics (common symptoms)
 
-## 5. Running
+| Symptom | Likely cause | Where to look |
+|---|---|---|
+| "60 FPS blocked" | runtime under Advanced is not an approved build | identity table above; `docs/34` |
+| "The selected folder must contain installation.json" | pointed at the parent folder | point at the manifest subfolder, or run PREPARE |
+| Total silence at boot (`[audio-peak] peak=0.0000`) | libmixer race (fixed since Alpha 0.2-audiofix) | `docs/34`; A/B via `scripts/audio-ab-diagnostic.ps1` |
+| Native executable SHA mismatch | installation manifest points at an old runtime | REPAIR with an approved runtime |
+| Where are the logs | — | `%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\` |
 
-Open the launcher → **PREPARE** (imports your `PS3_GAME` copy into a managed installation) or **REPAIR** → under **Advanced**, point to an approved `des_boot.exe` and the `EBOOT.ELF` from your copy → 60 FPS → **PLAY**. Every start verifies SHA-256 before releasing the button. For isolated testing set `DEMONS_SOULS_LAUNCHER_HOME`. Reproducible CLI without GUI: `--fps-compatibility` (JSON verdict), `--import`, `--repair`.
+## FAQ
 
-## 6. Diagnostics (common symptoms)
+**Is this an emulator?**
+No. Static recompilation translates the game's machine code ahead-of-time, once, into native x64 code. There is no general-purpose CPU emulation at runtime — PS3 system libraries are reimplemented natively, and rendering/audio go through Direct3D 12/WASAPI.
 
-- **"60 FPS blocked"** — the runtime under Advanced is not an approved build (table above).
-- **"The selected folder must contain installation.json"** — point at the manifest subfolder, or run PREPARE.
-- **Silence at boot / `[audio-peak] peak=0.0000`** — the documented libmixer race; A/B reproduce via `scripts/audio-ab-diagnostic.ps1` (`DES_AUDIO_NOTIFY_FIX=0/1`).
-- Logs: `%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\` (`launcher.log` + `operations\*.jsonl`).
+**Does the download include the game?**
+No. The Releases page contains only the launcher and tooling — no game code, no game data, no firmware, no keys. You must supply your own legally-obtained copy, and the launcher verifies identities before letting you play.
 
-## 7. Reproducing the audio fix
+**Where do I get the game?**
+You don't get it from here. This project requires a copy of the PS3 game that you legally own; you decrypt its own EBOOT locally on your machine (RPCS3 executable dump or scetool with public keys). The project distributes no decryption and no keys.
 
-1. Clone the `ps3recomp` fork at commit `add3cac07e29b4457ab24303804bfcc96056ba5a`; apply `patches\des-audio-notify-fix.patch` (3 files: `cellAudio.c`, `cellAtrac.c`, `ppu_hle.cpp`).
-2. Build the runtime/port CMake targets → your `des_boot.exe`.
-3. On the author's toolchain the build reproduces binary `83B23813254C542575244F394ED31A3BE2BBD276E6A1D70372D2C6C12A77AE7E` byte-exactly; other toolchains may differ — validate YOUR build and listen to it.
-4. A/B: `DES_AUDIO_NOTIFY_FIX=1` vs `0`; markers `[audio-notify-fix]`, `[audio-peak]`, per-window "silent %".
-5. **Listen to it yourself** (menus, combat, death/respawn). Automated tests prove PCM flows into WASAPI; they do not prove it sounds right.
+**Does it really run at 60 FPS? The original is 30.**
+There is an approved 60 FPS profile, gated by runtime identity. On the reference machine, area 1-1 measured ~120 FPS with specific settings — that measurement does not transfer to other machines, and physics above 60 FPS is untested.
 
-## 8. Limitations (honest)
+**Why is my `des_boot.exe` blocked?**
+The launcher enforces identity gates: only builds whose SHA-256 is approved run with 60 FPS. This is deliberate — it prevents running unknown or tampered executables. See the identity table above.
 
-Experimental research prototype, no guarantees; only the first area verified; physics > 60 FPS untested; some transparency glitches; high-FPS numbers are reference-machine measurements; audio fix validated on one audio setup; no online; solo-developer effort quality varies.
+**Can I contribute a build of the runtime?**
+Runtime builds are personal (built from your own decrypted copy); you can't attach them to an issue. Patches, port code, launcher code, scripts and docs are welcome — see [Contributing](#contributing).
 
-## 9. Contributing
+**Is this affiliated with Sony, FromSoftware or Atlus?**
+No. It is an independent, unofficial fan project with no affiliation, sponsorship, or endorsement from any rights holder. See the [Legal disclaimer](#legal-disclaimer).
 
-PRs welcome for `port/`, launcher sources, patches on `ps3recomp`, scripts/docs/tests. House rules: one technical issue per PR; small, tested, reversible changes; **absolutely nothing game-derived** (no `work/`, `.elf`, `.self`, `.prx`, dumps, saves, keys, firmware, assets, game screenshots); real test evidence in every PR (environment, date, result); see `AGENTS.md` and `docs/05-legal.md`.
+## Screenshots
 
-## 10. License & notices
+<!-- Screenshot policy: this repository deliberately contains no game-derived artwork
+     (see Legal disclaimer). Safe to commit: screenshots of the launcher's own UI
+     (your own software), placed under docs/screenshots/ or .github/assets/.
+     If you want in-game captures, host them externally and link them here by URL,
+     or consciously change the project's stated policy first. -->
 
-This project's code: MIT (`LICENSE`). Upstream ps3recomp: MIT. .NET 8 and RmlUi: MIT with standard notices. Fonts: OFL (Alegreya Sans, Cinzel) and Apache 2.0 (Material Symbols), license files included in `port/ui/res/fonts/`.
+When available, they will appear here:
 
-**Trademark notice:** "Demon's Souls" is a trademark of Sony Interactive Entertainment. This is an **INDEPENDENT, UNOFFICIAL fan project** — no affiliation with, sponsorship of, or endorsement by Sony Interactive Entertainment, FromSoftware, Atlus, or any rights holder. No artwork, logos, screenshots or game content appear in this repository. You are solely responsible for your own game copy; the project ships only original code and tooling.
+<!-- <p align="center">
+  <img src="docs/screenshots/launcher-installation-tab.png"
+       alt="Installation tab of the Demon's Souls PC launcher, showing the prepare wizard with source ISO, approved runtime and destination checks passing" width="700">
+</p>
+<p align="center">
+  <img src="docs/screenshots/launcher-play-60fps.png"
+       alt="Launcher advanced tab with an approved des_boot.exe and EBOOT.ELF paths confirmed and the 60 FPS toggle selected before PLAY" width="700">
+</p> -->
+
+## Contributing
+
+PRs are welcome for `port/`, launcher sources, patches on `ps3recomp`, scripts, docs, and tests. House rules (details in [CONTRIBUTING.md](CONTRIBUTING.md) and `AGENTS.md`):
+
+- One technical problem per PR; changes small, tested, and reversible.
+- **Absolutely nothing game-derived**: no `work/`, `.elf`, `.self`, `.prx`, dumps, saves, keys, firmware, assets, or game screenshots — never.
+- Describe real evidence (environment, date, hashes) in every PR; don't label anything "validated" that wasn't.
+
+Bug reports and feature requests: use the issue templates ([bug report](https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues/new?template=bug_report.yml) · [feature request](https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues/new?template=feature_request.yml)); open questions and setup help go to [Discussions](https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions).
+
+## Legal disclaimer
+
+- **This is an unofficial fan project** — a research prototype. No warranty of stability, performance, or compatibility of any kind.
+- **No game content is included or distributed here.** The repository ships only original code and tooling. The game's machine code and data stay yours: you decrypt them locally, on your machine, for interoperability, from your own copy. Keys, dumps, and assets are never committed, published, or shared.
+- **Trademark notice:** "Demon's Souls" is a trademark of Sony Interactive Entertainment. This project is an independent, unofficial fan port, with no affiliation with or endorsement by Sony Interactive Entertainment, FromSoftware, Atlus, or other rights holders. No artwork, logos, or game content appear in this repository.
+- You are solely responsible for your copy of the game. The project's rules are defined in `docs/05-legal.md`.
+- **License:** this project's code is MIT ([LICENSE](LICENSE)). Upstream ps3recomp: MIT. .NET 8 and RmlUi: MIT with standard notices. Fonts: OFL (Alegreya Sans, Cinzel) and Apache 2.0 (Material Symbols), with license files included in `port/ui/res/fonts/`.
+
+## Links
+
+- **Website:** https://leonardorobertomotalvao.github.io/demons-souls-pc/
+- **Website source:** [`docs/`](docs/) — static site (HTML + CSS + minimal JS, no build step), served by GitHub Pages from `main` + `/docs`. Its SEO metadata (meta tags, sitemap, JSON-LD, hreflang) improves discoverability; search engines alone decide indexing and ranking — no guarantee of indexing or positions.
+- **Repository:** https://github.com/Leonardorobertomotalvao/demons-souls-pc
+- **Releases (launcher packages):** https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases
+- **Discussions:** https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions
+- **Issues:** https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
+- **Technical chronicle:** [`docs/`](docs/) — 35 documents from feasibility to the launcher's prepare-optimization
+- **Upstream tooling:** [ps3recomp](https://github.com/sp00nznet/ps3recomp) (MIT) · fork [JonathanDC64/ps3recomp](https://github.com/JonathanDC64/ps3recomp) (MIT)

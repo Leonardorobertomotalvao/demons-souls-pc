@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <!-- Ilustração decorativa original: muralhas de Boletaria ao entardecer.
+       Arte desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#070b13"/>
+      <stop offset=".62" stop-color="#16233b"/>
+      <stop offset="1" stop-color="#2b3d5c"/>
+    </linearGradient>
+    <radialGradient id="moon" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#dfe9ff" stop-opacity=".95"/>
+      <stop offset=".55" stop-color="#9fb8e6" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="fog" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#9fb8e6" stop-opacity=".34"/>
+      <stop offset=".7" stop-color="#9fb8e6" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="url(#sky)"/>
+  <circle cx="628" cy="112" r="118" fill="url(#moon)"/>
+  <circle cx="628" cy="112" r="34" fill="#e8efff" opacity=".9"/>
+
+  <!-- crista distante -->
+  <path d="M0 344 L54 332 L108 340 L168 322 L236 336 L306 318 L372 330 L446 314 L520 328 L596 316 L672 330 L736 318 L800 332 L800 500 L0 500 Z" fill="#101a2c"/>
+
+  <!-- muralha e torres de Boletaria (silhueta) -->
+  <g fill="#0a101d">
+    <rect x="292" y="352" width="276" height="60"/>
+    <rect x="310" y="270" width="40" height="86"/>
+    <rect x="522" y="286" width="36" height="70"/>
+    <rect x="358" y="222" width="144" height="132"/>
+    <rect x="252" y="374" width="46" height="38"/>
+    <rect x="566" y="376" width="40" height="36"/>
+  </g>
+  <!-- ameias: torres -->
+  <g fill="#0a101d">
+    <rect x="310" y="262" width="8" height="10"/><rect x="326" y="262" width="8" height="10"/><rect x="342" y="262" width="8" height="10"/>
+    <rect x="522" y="278" width="8" height="10"/><rect x="536" y="278" width="8" height="10"/><rect x="550" y="278" width="8" height="10"/>
+  </g>
+  <!-- ameias: torre de menagem -->
+  <g fill="#0a101d">
+    <rect x="358" y="214" width="8" height="10"/><rect x="374" y="214" width="8" height="10"/><rect x="390" y="214" width="8" height="10"/>
+    <rect x="406" y="214" width="8" height="10"/><rect x="422" y="214" width="8" height="10"/><rect x="438" y="214" width="8" height="10"/>
+    <rect x="454" y="214" width="8" height="10"/><rect x="470" y="214" width="8" height="10"/><rect x="486" y="214" width="8" height="10"/>
+  </g>
+  <!-- ameias: muralha -->
+  <g fill="#0a101d">
+    <rect x="292" y="344" width="8" height="10"/><rect x="308" y="344" width="8" height="10"/><rect x="324" y="344" width="8" height="10"/>
+    <rect x="340" y="344" width="8" height="10"/><rect x="356" y="344" width="8" height="10"/><rect x="372" y="344" width="8" height="10"/>
+    <rect x="388" y="344" width="8" height="10"/><rect x="404" y="344" width="8" height="10"/><rect x="420" y="344" width="8" height="10"/>
+    <rect x="436" y="344" width="8" height="10"/><rect x="452" y="344" width="8" height="10"/><rect x="468" y="344" width="8" height="10"/>
+    <rect x="484" y="344" width="8" height="10"/><rect x="500" y="344" width="8" height="10"/><rect x="516" y="344" width="8" height="10"/>
+    <rect x="532" y="344" width="8" height="10"/><rect x="548" y="344" width="8" height="10"/>
+  </g>
+  <!-- portão (arco escuro) -->
+  <path d="M392 412 L392 384 Q416 360 440 384 L440 412 Z" fill="#05080e"/>
+
+  <!-- luzes espectrais nas torres ("almas") -->
+  <g>
+    <circle cx="330" cy="300" r="9" fill="#cfe0ff" opacity=".14"/>
+    <circle cx="330" cy="300" r="2.6" fill="#dce8ff" opacity=".9"/>
+    <circle cx="430" cy="262" r="9" fill="#cfe0ff" opacity=".12"/>
+    <circle cx="430" cy="262" r="2.4" fill="#dce8ff" opacity=".85"/>
+    <circle cx="540" cy="310" r="8" fill="#cfe0ff" opacity=".12"/>
+    <circle cx="540" cy="310" r="2.2" fill="#dce8ff" opacity=".8"/>
+  </g>
+
+  <!-- névoa na base -->
+  <ellipse cx="400" cy="446" rx="430" ry="64" fill="url(#fog)"/>
+  <ellipse cx="180" cy="470" rx="240" ry="46" fill="url(#fog)" opacity=".8"/>
+
+  <!-- ameias em primeiro plano, em ruína -->
+  <path fill="#04060b" d="M0 462 L44 462 L44 444 L70 444 L70 462 L118 462 L118 448 L146 448 L146 470 L150 500 L0 500 Z M150 500 L214 462 L214 448 L242 448 L242 466 L300 466 L300 452 L328 452 L328 470 L390 470 L390 456 L420 456 L420 474 L486 474 L486 460 L514 460 L514 478 L580 478 L580 462 L610 462 L610 480 L672 480 L672 464 L702 464 L702 482 L760 482 L760 468 L800 468 L800 500 Z"/>
+</svg>

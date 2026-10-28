@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <!-- Arte conceitual original: o Archstone do registro — pedestal com pedra-arco espectral.
+       Desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <radialGradient id="halo" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#cfe0ff" stop-opacity=".5"/>
+      <stop offset=".55" stop-color="#9fb8e6" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2840"/>
+      <stop offset="1" stop-color="#0b101d"/>
+    </linearGradient>
+    <linearGradient id="arch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe0ff"/>
+      <stop offset=".6" stop-color="#8fb4ea"/>
+      <stop offset="1" stop-color="#5d7fc0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="#05080f"/>
+  <rect x="0" y="0" width="800" height="500" fill="url(#halo)" opacity=".55"/>
+
+  <!-- arco gótico de fundo -->
+  <path d="M120 500 L120 180 Q260 66 400 180 L400 500" fill="none" stroke="#31405f" stroke-width="3"/>
+  <path d="M400 500 L400 170 Q540 58 680 170 L680 500" fill="none" stroke="#283550" stroke-width="2.4" opacity=".8"/>
+
+  <!-- pedestal -->
+  <g fill="url(#stone)">
+    <rect x="352" y="360" width="96" height="30"/>
+    <rect x="366" y="330" width="68" height="32"/>
+    <rect x="340" y="390" width="120" height="60"/>
+  </g>
+
+  <!-- archstone (losango facetado) -->
+  <g>
+    <path d="M400 218 L442 296 L400 356 L358 296 Z" fill="url(#arch)"/>
+    <path d="M400 218 L442 296 L400 356 Z" fill="#cfe0ff" opacity=".5"/>
+    <path d="M400 236 L430 296 L400 342 L370 296 Z" fill="#0d1424" opacity=".35"/>
+  </g>
+  <ellipse cx="400" cy="300" rx="150" ry="120" fill="url(#halo)"/>
+
+  <!-- raios de luz -->
+  <g stroke="#9fb8e6" opacity=".35" stroke-width="1.6">
+    <line x1="400" y1="230" x2="330" y2="120"/>
+    <line x1="402" y1="228" x2="470" y2="116"/>
+    <line x1="398" y1="234" x2="398" y2="96"/>
+  </g>
+
+  <!-- cavaleiro ajoelhado, silhueta -->
+  <g fill="#04060c">
+    <path d="M238 388 C246 358 268 344 292 348 L300 366 C282 366 264 376 258 392 Z"/>
+    <path d="M258 392 C270 410 296 420 318 416 L322 436 L250 436 C244 420 248 404 258 392 Z"/>
+    <rect x="296" y="352" width="14" height="34" rx="5"/>
+  </g>
+  <path d="M294 356 C300 348 308 344 316 346" fill="none" stroke="#9fc4ff" stroke-width="2" opacity=".5"/>
+
+  <!-- chão -->
+  <rect x="0" y="448" width="800" height="52" fill="#04060b"/>
+  <line x1="0" y1="448" x2="800" y2="448" stroke="#2b3a5c" stroke-width="1" opacity=".6"/>
+  <ellipse cx="400" cy="472" rx="360" ry="30" fill="#9fb8e6" opacity=".08"/>
+</svg>

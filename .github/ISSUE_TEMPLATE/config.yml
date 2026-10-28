@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & discussion
+    url: https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions
+    about: Setup help, compatibility reports, and general questions about the project.
