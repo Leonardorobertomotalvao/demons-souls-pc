@@ -33,7 +33,7 @@
   <meta property="og:image" content="https://leonardorobertomotalvao.github.io/demons-souls-pc/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="Banner do projeto Demon's Souls PC: muralhas de Boletaria em silhueta sob névoa azul, com o título DEMON'S SOULS PC PORT">
+  <meta property="og:image:alt" content="Banner do projeto Demon's Souls PC: cavaleiro diante das muralhas de Boletaria na névoa, com o título DEMON'S SOULS PC PORT">
   <meta property="og:locale" content="pt_BR">
   <meta property="og:locale:alternate" content="en_US">
 
@@ -42,7 +42,7 @@
   <meta name="twitter:title" content="Demon's Souls PC — porte nativo não-oficial para Windows x64">
   <meta name="twitter:description" content="Recompilação estática nativa, Direct3D 12 e launcher com verificação de integridade. Projeto comunitário, sem código ou dados do jogo.">
   <meta name="twitter:image" content="https://leonardorobertomotalvao.github.io/demons-souls-pc/social-preview.png">
-  <meta name="twitter:image:alt" content="Banner do projeto Demon's Souls PC: muralhas de Boletaria em silhueta sob névoa azul">
+  <meta name="twitter:image:alt" content="Banner do projeto Demon's Souls PC: cavaleiro diante das muralhas de Boletaria na névoa">
 
   <script type="application/ld+json">
   {
@@ -109,11 +109,11 @@
       </button>
       <nav class="site-nav" id="nav-principal" aria-label="Navegação principal">
         <a href="#sobre">Sobre</a>
-        <a href="#recursos">Recursos</a>
         <a href="#galeria">Galeria</a>
-        <a href="#downloads">Downloads</a>
-        <a href="#cronica">Crônicas</a>
+        <a href="#dev">Crônicas</a>
+        <a href="#tech">Tecnologias</a>
         <a href="#projetos">Projetos</a>
+        <a href="#instalar">Instalação</a>
         <a href="#comunidade">Comunidade</a>
         <a class="nav-gh" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc">GitHub ↗</a>
         <a class="lang-switch" href="en.html" hreflang="en" lang="en">EN</a>
@@ -123,13 +123,10 @@
 
   <main id="conteudo">
 
-    <!-- ============ HERO ============ -->
+    <!-- ============ 1 · HERO CINEMATOGRÁFICO ============ -->
     <section class="hero" aria-label="Abertura">
-      <div class="hero-sky" aria-hidden="true"></div>
-      <img class="hero-skyline" src="assets/gallery-boletaria.svg" alt="" aria-hidden="true" width="800" height="500">
-      <div class="hero-fog f1" aria-hidden="true"></div>
-      <div class="hero-fog f2" aria-hidden="true"></div>
-      <div class="hero-vignette" aria-hidden="true"></div>
+      <img class="hero-scene" src="assets/hero-corridor.svg" alt="" aria-hidden="true" width="1600" height="900">
+      <div class="hero-shade" aria-hidden="true"></div>
       <div class="hero-embers" aria-hidden="true">
         <span class="ember" style="--x:8%;--d:19s;--delay:0s"></span>
         <span class="ember" style="--x:19%;--d:24s;--delay:5s"></span>
@@ -155,24 +152,27 @@
         </p>
         <div class="hero-cta">
           <a class="btn primary" href="#sobre">Explorar o projeto</a>
-          <a class="btn" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc">Ver código-fonte no GitHub</a>
-          <a class="btn ghost" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/docs/03-setup.md">Consultar documentação</a>
-          <a class="btn ghost" href="#cronica">Acompanhar atualizações</a>
+          <a class="btn" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc">Acessar o GitHub</a>
+          <a class="btn ghost" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest">Consultar as versões</a>
         </div>
       </div>
     </section>
 
     <div class="wrap"><svg class="rune-divider" viewBox="0 0 340 24" aria-hidden="true"><path d="M0 12 H140" stroke="#54617c" stroke-width="1"/><path d="M200 12 H340" stroke="#54617c" stroke-width="1"/><path d="M170 2 L180 12 L170 22 L160 12 Z" fill="none" stroke="#8fb4ea" stroke-width="1.6"/><circle cx="170" cy="12" r="2.6" fill="#c3d9fb"/></svg></div>
 
-    <!-- ============ SOBRE ============ -->
+    <!-- ============ 2 · SOBRE ============ -->
     <section id="sobre" class="reveal">
       <div class="wrap">
         <p class="section-kicker">a forja do porte</p>
         <h2 class="section-title">Sobre o projeto</h2>
         <p class="section-sub">O propósito, a arquitetura e os objetivos — como registrados na documentação do repositório.</p>
 
-        <div class="about-grid">
-          <div class="about-copy">
+        <div class="split">
+          <figure class="s-media">
+            <img src="assets/concept-archstone.svg" alt="Arte conceitual: cavaleiro ajoelhado diante de um Archstone espectral sobre pedestal de pedra" width="800" height="500" loading="lazy">
+            <figcaption class="s-cap">Arte conceitual original deste site — não é captura do porte.</figcaption>
+          </figure>
+          <div class="s-copy">
             <p><strong>O que é.</strong> Um porte experimental "Demon's Souls PC" (Alpha 0.2) pela técnica de
             recompilação estática, no modelo de projetos como <em>Zelda 64 Recompiled</em>: o executável do jogo
             (decriptado localmente pelo usuário) é traduzido uma única vez para código nativo x64, resultando em
@@ -185,10 +185,7 @@
             <p><strong>Honestidade primeiro.</strong> Nível de maturidade: protótipo funcional, validado em
             <strong>uma máquina de referência única</strong> (Windows 10, máquina do autor). A área verificada vai
             do boot até o Palácio Boletariano 1-1; o restante do jogo não foi testado. Nada aqui é promessa para
-            outras máquinas — veja os limites na seção de <a href="#downloads">downloads e requisitos</a>.</p>
-          </div>
-
-          <aside class="about-side" aria-label="Registros do projeto">
+            outras máquinas — veja os limites em <a href="#instalar">instalação e requisitos</a>.</p>
             <div class="panel">
               <h3>Registros do projeto</h3>
               <dl>
@@ -201,134 +198,184 @@
                 <div class="mini-stat"><dt>Licença</dt><dd>MIT (código próprio)</dd></div>
               </dl>
             </div>
-            <div class="panel">
-              <h3>Base upstream</h3>
-              <p>Construído sobre o <a href="https://github.com/sp00nznet/ps3recomp">ps3recomp</a> (MIT) e o fork
-              <a href="https://github.com/JonathanDC64/ps3recomp">JonathanDC64/ps3recomp</a>; as contribuições deste
-              projeto são os patches em <code>patches/</code> e a camada de porte em <code>port/</code>.</p>
-            </div>
-          </aside>
+          </div>
         </div>
       </div>
     </section>
 
     <div class="alt-band">
-      <!-- ============ RECURSOS ============ -->
-      <section id="recursos" class="reveal">
+      <!-- ============ 3 · GALERIA ============ -->
+      <section id="galeria" class="reveal">
         <div class="wrap">
-          <p class="section-kicker">o inventário do porte</p>
-          <h2 class="section-title">Recursos confirmados</h2>
-          <p class="section-sub">Apenas funcionalidades implementadas e verificadas na máquina de referência —
-          nenhuma promessa além do que os registros provam. Evidências na documentação técnica (<a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/tree/main/docs">docs/00–35</a>).</p>
+          <p class="section-kicker">registros visuais</p>
+          <h2 class="section-title">Galeria</h2>
+          <p class="section-sub">Arte conceitual original, desenhada para este site — <strong>não são capturas do
+          porte</strong>. Capturas e vídeos reais do porte serão adicionados aqui quando houver material autorizado
+          para publicação. Clique para ampliar.</p>
 
-          <div class="features-grid">
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M12 3 L20 6 V12 C20 17 16.5 20 12 21 C7.5 20 4 17 4 12 V6 Z"/><path d="M12 7 V17 M8.5 10.5 H15.5"/></svg></span>
-                <h3>Launcher completo</h3>
-              </div>
-              <p>Importa, prepara e repara uma instalação gerenciada a partir da sua ISO local ou pasta PS3_GAME,
-              com verificação SHA-256 de cada componente, gates de identidade (runtime não aprovado é bloqueado) e
-              registro de operações em traces JSONL.</p>
-              <p class="evidence">Fonte: launcher-alpha02-hotfix/ · crônica: docs/32, docs/35</p>
-            </article>
+          <div class="gallery-grid">
+            <figure class="reveal in">
+              <button class="g-item" data-lightbox>
+                <img src="assets/gallery-boletaria.svg" alt="Ilustração decorativa de muralhas de castelo em silhueta ao entardecer, sob névoa azul" width="800" height="500" loading="lazy" data-cap="Muralhas de Boletaria — arte conceitual original (não é captura do porte)">
+              </button>
+              <figcaption class="g-cap">Muralhas de Boletaria — arte conceitual</figcaption>
+            </figure>
 
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M5 19 L15.5 8.5 M15.5 8.5 L18 6 M14 4 L20 10 M18 6 L20 4 M5 19 L4 20 M7 14 L10 17"/></svg></span>
-                <h3>Runtime nativo x64</h3>
-              </div>
-              <p>O código PowerPC/SPU do jogo é convertido para C antecipadamente (AOT) e compilado para
-              <strong>des_boot.exe</strong> — sem emulação general-purpose em tempo de execução. Boot PPU completo
-              e imagens SPU recompiladas.</p>
-              <p class="evidence">Fonte: port/ · patches/ · crônica: docs/08, docs/09</p>
-            </article>
+            <figure class="reveal in">
+              <button class="g-item" data-lightbox>
+                <img src="assets/gallery-fog-gate.svg" alt="Ilustração decorativa de um portal de névoa entre dois pilares antigos de pedra" width="800" height="500" loading="lazy" data-cap="O portal de névoa — arte conceitual original (não é captura do porte)">
+              </button>
+              <figcaption class="g-cap">O portal de névoa — arte conceitual</figcaption>
+            </figure>
 
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M2 12 C5 6.5 9 4 12 4 C15 4 19 6.5 22 12 C19 17.5 15 20 12 20 C9 20 5 17.5 2 12 Z"/><circle cx="12" cy="12" r="3.2"/></svg></span>
-              <h3>Renderização Direct3D 12</h3>
-              </div>
-              <p>Cenas iluminadas e texturizadas com sombras, HUD, partículas, <em>light shafts</em> e haze; shaders
-              pré-compilados — o jogo não pausa para compilar shader.</p>
-              <p class="evidence">Crônica: docs/24, docs/26, docs/28</p>
-            </article>
-
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M12 3 C8 8 6.5 10.5 6.5 14 A5.5 5.5 0 0 0 17.5 14 C17.5 10.5 16 8 12 3 Z"/><path d="M9.5 15.5 A2.6 2.6 0 0 0 12 18"/></svg></span>
-                <h3>Áudio corrigido na raiz</h3>
-              </div>
-              <p>O bug de silêncio total na inicialização (corrida da fila de eventos do libmixer) foi corrigido e
-              validado por A/B: o PCM chega ao WASAPI com o fix ligado e não chega desligado (3752/3752 e 8442/8442
-              notificações em dois conjuntos de testes), além de validação auditiva pelo autor.</p>
-              <p class="evidence">Patch: patches/des-audio-notify-fix.patch · crônica: docs/34</p>
-            </article>
-
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M6 3 H18 V8 A6 6 0 0 1 12 14 A6 6 0 0 1 6 8 Z M6 21 H18 V16 A6 6 0 0 0 12 10 A6 6 0 0 0 6 16 Z M4 2 H20 M4 22 H20"/></svg></span>
-                <h3>Save/load e sons de menu</h3>
-              </div>
-              <p>Save e load funcionando, incluindo os sons de menu do jogo, com perfil de 60 FPS aprovado por
-              verificação de identidade do runtime.</p>
-              <p class="evidence">Crônica: docs/28, docs/33</p>
-            </article>
-
-            <article class="panel feature">
-              <div class="icon-row">
-                <span class="icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8fb4ea" stroke-width="1.6"><path d="M7 3 H19 V21 H7 A2 2 0 0 1 5 19 V5 A2 2 0 0 1 7 3 Z M19 17 H5 M9 8 H15 M9 11 H13"/></svg></span>
-                <h3>Documentação crônica</h3>
-              </div>
-              <p>35 documentos técnicos narram todo o caminho: da análise de viabilidade ao boot, SPURS/SPU, áudio,
-              launcher e otimização da preparação — com evidências, hashes e metodologia.</p>
-              <p class="evidence">docs/00-feasibility.md → docs/35-launcher-prepare-optimization.md</p>
-            </article>
+            <figure class="reveal in">
+              <button class="g-item" data-lightbox>
+                <img src="assets/gallery-nexus.svg" alt="Ilustração decorativa de arcos góticos em perspectiva com luzes espectrais suspensas" width="800" height="500" loading="lazy" data-cap="Arcos do Nexus — arte conceitual original (não é captura do porte)">
+              </button>
+              <figcaption class="g-cap">Arcos do Nexus — arte conceitual</figcaption>
+            </figure>
           </div>
         </div>
       </section>
     </div>
 
-    <!-- ============ GALERIA ============ -->
-    <section id="galeria" class="reveal">
+    <!-- ============ 4 · DESENVOLVIMENTO / CRÔNICAS ============ -->
+    <section id="dev" class="reveal">
       <div class="wrap">
-        <p class="section-kicker">registros visuais</p>
-        <h2 class="section-title">Galeria</h2>
-        <p class="section-sub">Composições decorativas originais, desenhadas para este site — <strong>não são
-        capturas do porte</strong>. Capturas autênticas serão adicionadas aqui quando houver material autorizado
-        para publicação. Clique para ampliar.</p>
+        <p class="section-kicker">as crônicas de boletaria</p>
+        <h2 class="section-title">Desenvolvimento e versões</h2>
+        <p class="section-sub">Versões publicadas, com data e resumo — fontes verificadas nas
+        <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases">releases do GitHub</a>.</p>
 
-        <div class="gallery-grid">
-          <figure class="reveal in">
-            <button class="g-item" data-lightbox>
-              <img src="assets/gallery-boletaria.svg" alt="Ilustração decorativa de muralhas de castelo em silhueta ao entardecer, sob névoa azul" width="800" height="500" loading="lazy" data-cap="Muralhas de Boletaria — ilustração decorativa original do site (não é captura do porte)">
-            </button>
-            <figcaption class="g-cap">Muralhas de Boletaria — arte original do site</figcaption>
-          </figure>
-
-          <figure class="reveal in">
-            <button class="g-item" data-lightbox>
-              <img src="assets/gallery-fog-gate.svg" alt="Ilustração decorativa de um portal de névoa entre dois pilares antigos de pedra" width="800" height="500" loading="lazy" data-cap="O portal de névoa — ilustração decorativa original do site (não é captura do porte)">
-            </button>
-            <figcaption class="g-cap">O portal de névoa — arte original do site</figcaption>
-          </figure>
-
-          <figure class="reveal in">
-            <button class="g-item" data-lightbox>
-              <img src="assets/gallery-nexus.svg" alt="Ilustração decorativa de arcos góticos em perspectiva com luzes espectrais suspensas" width="800" height="500" loading="lazy" data-cap="Arcos do Nexus — ilustração decorativa original do site (não é captura do porte)">
-            </button>
-            <figcaption class="g-cap">Arcos do Nexus — arte original do site</figcaption>
+        <div class="split rev">
+          <div class="s-copy">
+            <div class="chronicles">
+              <article class="chron">
+                <div class="chron-head">
+                  <h3>v0.2.1-alpha.1</h3>
+                  <span class="chron-tag">launcher</span>
+                  <span class="chron-date">26 de outubro de 2026</span>
+                </div>
+                <p><code>--source-image</code> falha alto quando o arquivo não existe; correção dos validadores que
+                travavam o VERIFICAR em instalações reais; preparação otimizada (8,77 GiB em HDD): verificação
+                completa em 4,0 s lendo 0 bytes (identidade NTFS/USN), re-preparo em 9,1 s, reparo de arquivo único
+                em 16,1 s.
+                <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/tag/v0.2.1-alpha.1">Notas completas ↗</a></p>
+              </article>
+              <article class="chron">
+                <div class="chron-head">
+                  <h3>v0.2.1-alpha</h3>
+                  <span class="chron-tag">launcher</span>
+                  <span class="chron-date">22 de outubro de 2026</span>
+                </div>
+                <p>Primeira release do launcher Windows x64 (self-contained .NET 8), com importação e reparo de
+                instalações gerenciadas, gates de identidade e traces JSONL.
+                <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/tag/v0.2.1-alpha">Notas completas ↗</a></p>
+              </article>
+            </div>
+            <p style="margin-top:16px;font-size:.9rem">
+              <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases">Todas as releases ↗</a> ·
+              <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/commits/main">Histórico de commits ↗</a> ·
+              <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/CHANGELOG.md">Changelog ↗</a>
+            </p>
+          </div>
+          <figure class="s-media">
+            <img src="assets/concept-chronicle.svg" alt="Arte conceitual: pergaminho com crônica, pena e vela acesa sobre mesa de pedra" width="800" height="500" loading="lazy">
+            <figcaption class="s-cap">Arte conceitual original deste site — não é captura do porte.</figcaption>
           </figure>
         </div>
       </div>
     </section>
 
     <div class="alt-band">
-      <!-- ============ DOWNLOADS ============ -->
-      <section id="downloads" class="reveal">
+      <!-- ============ 5 · TECNOLOGIAS E PUBLICAÇÃO ============ -->
+      <section id="tech" class="reveal">
+        <div class="wrap">
+          <p class="section-kicker">engrenagens e runas</p>
+          <h2 class="section-title">Tecnologias e publicação</h2>
+          <p class="section-sub">A stack do porte e a infraestrutura de publicação do projeto.</p>
+
+          <div class="split">
+            <figure class="s-media">
+              <img src="assets/concept-crystal.svg" alt="Arte conceitual: cristal facetado azul flutuando sobre pedestal rúnico entre colunas" width="800" height="500" loading="lazy">
+              <figcaption class="s-cap">Arte conceitual original deste site — não é captura do porte.</figcaption>
+            </figure>
+            <div class="s-copy">
+              <p>O porte traduz o código PowerPC/SPU do jogo <strong>antecipadamente</strong> para C e liga o
+              resultado a reimplementações clean-room das bibliotecas do PS3 — sem emulação de CPU em tempo de
+              execução. O launcher gerencia instalação e integridade; o site é estático e publicado no GitHub Pages.</p>
+              <div class="tech-grid">
+                <div class="tech"><div class="t-name">C / C++</div><div class="t-sub">runtime AOT · patches</div></div>
+                <div class="tech"><div class="t-name">C# · .NET 8</div><div class="t-sub">launcher WPF</div></div>
+                <div class="tech"><div class="t-name">Direct3D 12</div><div class="t-sub">renderização</div></div>
+                <div class="tech"><div class="t-name">WASAPI</div><div class="t-sub">áudio</div></div>
+                <div class="tech"><div class="t-name">ps3recomp</div><div class="t-sub">base upstream (MIT)</div></div>
+                <div class="tech"><div class="t-name">GitHub Pages</div><div class="t-sub">publicação do site</div></div>
+              </div>
+              <div class="pub-block">
+                <h3>Publicação</h3>
+                <p>Este site é servido pelo GitHub Pages a partir da pasta <code>docs/</code> da branch
+                <code>main</code>, com HTTPS, caminhos relativos compatíveis com o prefixo
+                <code>/demons-souls-pc/</code>, sitemap e metadados SEO. A indexação e as posições em buscadores
+                dependem exclusivamente deles — não há garantia de indexação ou posições.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ 6 · OUTROS PROJETOS ============ -->
+    <section id="projetos" class="reveal">
+      <div class="wrap">
+        <p class="section-kicker">relicários do autor</p>
+        <h2 class="section-title">Outros projetos</h2>
+        <p class="section-sub">Outros repositórios públicos do desenvolvedor — <a href="https://github.com/Leonardorobertomotalvao">github.com/Leonardorobertomotalvao</a>. Dados reais (API do GitHub, 28/10/2026).</p>
+
+        <div class="relics">
+          <article class="panel relic">
+            <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/creatorvault-studio">creatorvault-studio</a></h3>
+            <p class="r-type">artefato · aplicação Windows</p>
+            <p>Downloads autorizados, biblioteca e cortes locais. Executável portátil, configuração de
+            autenticação e fila com progresso corrigido.</p>
+            <div class="meta"><span class="chip lang">JavaScript</span><span class="star">★ 0</span><span class="chip">atualizado em 11/10/2026</span></div>
+            <a class="go" href="https://github.com/Leonardorobertomotalvao/creatorvault-studio">Ver no GitHub →</a>
+          </article>
+
+          <article class="panel relic">
+            <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/ssd-system-guard">ssd-system-guard</a></h3>
+            <p class="r-type">artefato · ferramenta de sistema</p>
+            <p>Proteção de downloads no SSD do sistema, monitoramento Steam e Epic Games, detecção de jogos
+            portáteis, alertas, quarentena automática, painel de controle, logs e histórico.</p>
+            <div class="meta"><span class="chip lang">PowerShell</span><span class="star">★ 1</span><span class="chip">atualizado em 07/10/2026</span></div>
+            <a class="go" href="https://github.com/Leonardorobertomotalvao/ssd-system-guard">Ver no GitHub →</a>
+          </article>
+
+          <article class="panel relic">
+            <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/game-testing-portfolio">game-testing-portfolio</a></h3>
+            <p class="r-type">artefato · portfólio</p>
+            <p>Game testing portfolio with bug reports, playtest feedback and performance analysis.</p>
+            <div class="meta"><span class="chip">atualizado em 07/10/2026</span></div>
+            <a class="go" href="https://github.com/Leonardorobertomotalvao/game-testing-portfolio">Ver no GitHub →</a>
+          </article>
+
+          <article class="panel relic">
+            <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/na-quele-epoca">na-quele-epoca</a></h3>
+            <p class="r-type">artefato · projeto web</p>
+            <p>Projeto em TypeScript — descrição e detalhes no repositório.</p>
+            <div class="meta"><span class="chip lang">TypeScript</span><span class="star">★ 0</span><span class="chip">atualizado em 22/09/2026</span></div>
+            <a class="go" href="https://github.com/Leonardorobertomotalvao/na-quele-epoca">Ver no GitHub →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <div class="alt-band">
+      <!-- ============ 7 · INSTALAÇÃO, DOCUMENTAÇÃO E COMUNIDADE ============ -->
+      <section id="instalar" class="reveal">
         <div class="wrap">
           <p class="section-kicker">o arquivo de boletaria</p>
-          <h2 class="section-title">Downloads e instalação</h2>
+          <h2 class="section-title">Instalação e documentação</h2>
           <p class="section-sub">Como obter o launcher e preparar a sua instalação — usando <strong>a sua própria
           cópia legal do jogo</strong>. O projeto não distribui o jogo, firmware, chaves ou dados protegidos.</p>
 
@@ -363,7 +410,7 @@
           </ol>
 
           <div class="dl-actions" style="justify-content:center">
-            <a class="btn primary" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest">Baixar o launcher (release v0.2.1-alpha.1)</a>
+            <a class="btn primary" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/latest">Baixar o launcher (v0.2.1-alpha.1)</a>
             <a class="btn" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases">Todas as releases</a>
             <a class="btn ghost" href="https://github.com/Leonardorobertomotalvao/demons-souls-pc#instala%C3%A7%C3%A3o">Instruções no README</a>
           </div>
@@ -402,135 +449,38 @@
       </section>
     </div>
 
-    <!-- ============ CRÔNICAS ============ -->
-    <section id="cronica" class="reveal">
-      <div class="wrap">
-        <p class="section-kicker">as crônicas de boletaria</p>
-        <h2 class="section-title">Atualizações</h2>
-        <p class="section-sub">Versões publicadas, com data e resumo — fontes verificadas nas
-        <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases">releases do GitHub</a>.
-        Novas versões serão listadas aqui quando existirem.</p>
-
-        <div class="chronicles">
-          <article class="chron">
-            <div class="chron-head">
-              <h3>v0.2.1-alpha.1</h3>
-              <span class="chron-tag">launcher</span>
-              <span class="chron-date">26 de outubro de 2026</span>
-            </div>
-            <p><code>--source-image</code> falha alto quando o arquivo não existe; correção dos validadores que
-            travavam o VERIFICAR em instalações reais; preparação e verificação otimizadas na instalação de
-            referência (8,77 GiB em HDD): verificação completa em 4,0 s lendo 0 bytes (identidade NTFS/USN),
-            re-preparo com a mesma ISO em 9,1 s e reparo de um único arquivo em 16,1 s.
-            <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/tag/v0.2.1-alpha.1">Notas completas ↗</a></p>
-          </article>
-
-          <article class="chron">
-            <div class="chron-head">
-              <h3>v0.2.1-alpha</h3>
-              <span class="chron-tag">launcher</span>
-              <span class="chron-date">22 de outubro de 2026</span>
-            </div>
-            <p>Primeira release do launcher Windows x64 (self-contained .NET 8), com importação e reparo de
-            instalações gerenciadas, gates de identidade e traces JSONL — junto do registro do Alpha 0.2 do porte.
-            <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases/tag/v0.2.1-alpha">Notas completas ↗</a></p>
-          </article>
-        </div>
-
-        <p class="section-sub" style="margin-top:24px">
-          <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases">Todas as releases ↗</a> ·
-          <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/commits/main">Histórico de commits ↗</a>
-        </p>
-      </div>
-    </section>
-
-    <div class="alt-band">
-      <!-- ============ OUTROS PROJETOS ============ -->
-      <section id="projetos" class="reveal">
-        <div class="wrap">
-          <p class="section-kicker">relicários do autor</p>
-          <h2 class="section-title">Outros projetos</h2>
-          <p class="section-sub">Outros repositórios públicos do desenvolvedor — <a href="https://github.com/Leonardorobertomotalvao">github.com/Leonardorobertomotalvao</a>. Dados reais (API do GitHub, 28/10/2026).</p>
-
-          <div class="relics">
-            <article class="panel relic">
-              <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/creatorvault-studio">creatorvault-studio</a></h3>
-              <p class="r-type">artefato · aplicação Windows</p>
-              <p>Downloads autorizados, biblioteca e cortes locais. Executável portátil, configuração de
-              autenticação e fila com progresso corrigido.</p>
-              <div class="meta"><span class="chip lang">JavaScript</span><span class="star">★ 0</span><span class="chip">atualizado em 11/10/2026</span></div>
-              <a class="go" href="https://github.com/Leonardorobertomotalvao/creatorvault-studio">Ver no GitHub →</a>
-            </article>
-
-            <article class="panel relic">
-              <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/ssd-system-guard">ssd-system-guard</a></h3>
-              <p class="r-type">artefato · ferramenta de sistema</p>
-              <p>Proteção de downloads no SSD do sistema, monitoramento Steam e Epic Games, detecção de jogos
-              portáteis, alertas, quarentena automática, painel de controle, logs e histórico.</p>
-              <div class="meta"><span class="chip lang">PowerShell</span><span class="star">★ 1</span><span class="chip">atualizado em 07/10/2026</span></div>
-              <a class="go" href="https://github.com/Leonardorobertomotalvao/ssd-system-guard">Ver no GitHub →</a>
-            </article>
-
-            <article class="panel relic">
-              <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/game-testing-portfolio">game-testing-portfolio</a></h3>
-              <p class="r-type">artefato · portfólio</p>
-              <p>Game testing portfolio with bug reports, playtest feedback and performance analysis.</p>
-              <div class="meta"><span class="chip">atualizado em 07/10/2026</span></div>
-              <a class="go" href="https://github.com/Leonardorobertomotalvao/game-testing-portfolio">Ver no GitHub →</a>
-            </article>
-
-            <article class="panel relic">
-              <h3 class="r-name"><a href="https://github.com/Leonardorobertomotalvao/na-quele-epoca">na-quele-epoca</a></h3>
-              <p class="r-type">artefato · projeto web</p>
-              <p>Projeto em TypeScript — descrição e detalhes no repositório.</p>
-              <div class="meta"><span class="chip lang">TypeScript</span><span class="star">★ 0</span><span class="chip">atualizado em 22/09/2026</span></div>
-              <a class="go" href="https://github.com/Leonardorobertomotalvao/na-quele-epoca">Ver no GitHub →</a>
-            </article>
-          </div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ============ COMUNIDADE ============ -->
+    <!-- Comunidade -->
     <section id="comunidade" class="reveal">
       <div class="wrap">
         <p class="section-kicker">o nexus dos desenvolvedores</p>
         <h2 class="section-title">Comunidade</h2>
         <p class="section-sub">Onde aventureiros e desenvolvedores se encontram para reparar Boletaria.</p>
 
-        <div class="nexus-grid">
-          <article class="panel">
-            <h3><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues">Issues</a></h3>
-            <p>Reporte bugs e problemas do launcher ou do runtime usando o template de bug report.</p>
-          </article>
-          <article class="panel">
-            <h3><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions">Discussions</a></h3>
-            <p>Dúvidas, ajuda de configuração e relatos de compatibilidade (habilitado no repositório).</p>
-          </article>
-          <article class="panel">
-            <h3><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/pulls">Pull Requests</a></h3>
-            <p>Regras da casa: um problema técnico por PR, mudanças pequenas e reversíveis, provas reais
-            (ambiente, data, hashes) e <strong>nada derivado do jogo</strong>. Veja
-            <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
-          </article>
-          <article class="panel">
-            <h3><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/tree/main/docs">Documentação</a></h3>
-            <p>Crônica técnica completa (docs/00–35), regras legais em docs/05 e convenções no
-            <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/AGENTS.md">AGENTS.md</a>.</p>
-          </article>
-        </div>
-
-        <div class="bug-help">
-          <h4>Como reportar um bug útil</h4>
-          <p>Inclua o máximo de contexto verificável — nunca senhas ou dados pessoais:</p>
-          <ul>
-            <li>Sistema operacional e versão (Windows 10/11)</li>
-            <li>Hardware: GPU, driver, RAM</li>
-            <li>Versão do launcher em uso (ex.: v0.2.1-alpha.1)</li>
-            <li>Logs: <code>%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\</code> (launcher.log e operations/*.jsonl)</li>
-            <li>Passos exatos para reproduzir, resultado esperado × obtido</li>
-            <li>Nunca anexe ou linke arquivos do jogo, firmware, chaves, dumps ou saves</li>
-          </ul>
+        <div class="split">
+          <figure class="s-media">
+            <img src="assets/concept-nexus.svg" alt="Arte conceitual: salão do Nexus com archstones espectrais, arcos góticos e figura distante" width="800" height="500" loading="lazy">
+            <figcaption class="s-cap">Arte conceitual original deste site — não é captura do porte.</figcaption>
+          </figure>
+          <div class="s-copy">
+            <ul class="s-list">
+              <li><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/issues">Issues</a> — reporte bugs do launcher ou do runtime usando o template de bug report.</li>
+              <li><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions">Discussions</a> — dúvidas, ajuda de configuração e relatos de compatibilidade (habilitado no repositório).</li>
+              <li><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/pulls">Pull Requests</a> — um problema por PR, mudanças pequenas e reversíveis, provas reais e <strong>nada derivado do jogo</strong> (veja <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>).</li>
+              <li><a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/tree/main/docs">Documentação</a> — crônica técnica completa (docs/00–35), regras legais em docs/05, convenções no <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/AGENTS.md">AGENTS.md</a>.</li>
+            </ul>
+            <div class="bug-help" style="margin-top:18px">
+              <h3>Como reportar um bug útil</h3>
+              <p>Inclua o máximo de contexto verificável — nunca senhas ou dados pessoais:</p>
+              <ul>
+                <li>Sistema operacional e versão (Windows 10/11)</li>
+                <li>Hardware: GPU, driver, RAM</li>
+                <li>Versão do launcher em uso (ex.: v0.2.1-alpha.1)</li>
+                <li>Logs: <code>%LOCALAPPDATA%\DemonsSoulsPCLauncher\logs\</code> (launcher.log e operations/*.jsonl)</li>
+                <li>Passos exatos para reproduzir, resultado esperado × obtido</li>
+                <li>Nunca anexe ou linke arquivos do jogo, firmware, chaves, dumps ou saves</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -574,7 +524,7 @@
         Interactive Entertainment.</p>
         <p>O código do projeto é distribuído sob a licença MIT (<a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc/blob/main/LICENSE">LICENSE</a>);
         ps3recomp upstream e o fork são MIT; fontes do site: OFL (Cinzel, via Google Fonts). Nenhuma arte, captura,
-        música ou dado do jogo é usado ou distribuído neste site; as ilustrações são originais e decorativas.</p>
+        música ou dado do jogo é usado ou distribuído neste site; as ilustrações são originais e conceituais.</p>
         <p>© 2026 LEONARDO (Leonardorobertomotalvao) · <a href="https://github.com/Leonardorobertomotalvao/demons-souls-pc">github.com/Leonardorobertomotalvao/demons-souls-pc</a></p>
       </div>
     </div>

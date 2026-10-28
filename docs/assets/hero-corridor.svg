@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img">
+  <!-- Arte conceitual original: corredor de arcos de Boletaria com a catedral na névoa,
+       cavaleiro em primeiro plano. Desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26364e"/>
+      <stop offset=".58" stop-color="#4f6180"/>
+      <stop offset="1" stop-color="#77889f"/>
+    </linearGradient>
+    <radialGradient id="fog" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#d7e2f0" stop-opacity=".55"/>
+      <stop offset=".6" stop-color="#c9d6ea" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#c9d6ea" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mist" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#c9d6ea" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#c9d6ea" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="candle" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffd27a" stop-opacity=".85"/>
+      <stop offset=".4" stop-color="#d99a3f" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#d99a3f" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vin" cx=".5" cy=".44" r=".72">
+      <stop offset="0" stop-color="#04060a" stop-opacity="0"/>
+      <stop offset=".72" stop-color="#04060a" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#04060a" stop-opacity=".66"/>
+    </radialGradient>
+  </defs>
+
+  <!-- céu frio -->
+  <rect width="1600" height="900" fill="url(#sky)"/>
+
+  <!-- catedral monumental ao fundo, no vão central -->
+  <g fill="#3c4c64" opacity=".92">
+    <rect x="690" y="270" width="240" height="290"/>
+    <rect x="770" y="196" width="80" height="90"/>
+    <path d="M810 118 L850 196 L770 196 Z"/>
+    <rect x="646" y="352" width="44" height="208"/>
+    <rect x="930" y="352" width="44" height="208"/>
+    <path d="M668 300 L690 352 L646 352 Z"/>
+    <path d="M952 300 L974 352 L930 352 Z"/>
+  </g>
+  <!-- névoa volumétrica sobre a base da catedral -->
+  <ellipse cx="810" cy="560" rx="470" ry="150" fill="url(#fog)"/>
+
+  <!-- fachadas laterais em silhueta, com arcos cegos -->
+  <g fill="#0d1524">
+    <rect x="0" y="256" width="520" height="644"/>
+    <rect x="1080" y="256" width="520" height="644"/>
+  </g>
+  <g fill="#1a2438">
+    <rect x="0" y="240" width="530" height="26"/>
+    <rect x="1070" y="240" width="530" height="26"/>
+  </g>
+  <g fill="none" stroke="#2e3d58" stroke-width="7" opacity=".9">
+    <path d="M64 900 V430 Q158 330 252 430 V900"/>
+    <path d="M312 900 V448 Q392 366 472 448 V900"/>
+    <path d="M1132 900 V436 Q1222 336 1312 436 V900"/>
+    <path d="M1380 900 V456 Q1456 378 1532 456 V900"/>
+  </g>
+  <!-- janelas altas com luz espectral -->
+  <g fill="none" stroke="#54617c" stroke-width="4" opacity=".7">
+    <path d="M158 340 Q158 268 158 268"/>
+  </g>
+  <g>
+    <circle cx="158" cy="316" r="34" fill="url(#candle)"/>
+    <circle cx="158" cy="316" r="6" fill="#ffe9bd" opacity=".95"/>
+    <circle cx="392" cy="352" r="26" fill="url(#candle)" opacity=".8"/>
+    <circle cx="392" cy="352" r="4.4" fill="#ffe9bd" opacity=".85"/>
+    <circle cx="1222" cy="330" r="30" fill="url(#candle)" opacity=".85"/>
+    <circle cx="1222" cy="330" r="5" fill="#ffe9bd" opacity=".9"/>
+    <circle cx="1456" cy="364" r="24" fill="url(#candle)" opacity=".75"/>
+    <circle cx="1456" cy="364" r="4" fill="#ffe9bd" opacity=".8"/>
+  </g>
+
+  <!-- piso de pedra -->
+  <rect x="0" y="764" width="1600" height="136" fill="#101828"/>
+  <g stroke="#22304a" stroke-width="2" opacity=".8">
+    <line x1="0" y1="790" x2="1600" y2="790"/>
+    <line x1="0" y1="836" x2="1600" y2="836"/>
+    <line x1="240" y1="764" x2="120" y2="900"/>
+    <line x1="560" y1="764" x2="480" y2="900"/>
+    <line x1="880" y1="764" x2="880" y2="900"/>
+    <line x1="1200" y1="764" x2="1280" y2="900"/>
+    <line x1="1420" y1="764" x2="1540" y2="900"/>
+  </g>
+  <ellipse cx="800" cy="828" rx="330" ry="58" fill="url(#mist)"/>
+
+  <!-- cavaleiro em silhueta, de costas, iluminado pelo vão -->
+  <g fill="#060910">
+    <!-- capa -->
+    <path d="M758 606 C740 700 748 792 732 866 L872 866 C862 782 868 700 854 610 Z"/>
+    <!-- elmo -->
+    <path d="M778 566 Q801 542 826 566 L830 606 L774 606 Z"/>
+    <!-- ombreiras -->
+    <ellipse cx="766" cy="630" rx="22" ry="18"/>
+    <ellipse cx="838" cy="630" rx="22" ry="18"/>
+    <!-- tronco -->
+    <rect x="772" y="614" width="60" height="112" rx="10"/>
+    <!-- pernas -->
+    <path d="M776 716 L802 716 L800 866 L772 866 Z"/>
+    <path d="M806 716 L832 716 L836 866 L810 866 Z"/>
+  </g>
+  <!-- pluma do elmo -->
+  <path d="M801 552 C795 572 795 590 801 606" fill="none" stroke="#060910" stroke-width="8" stroke-linecap="round"/>
+  <!-- braço e espada baixa -->
+  <path d="M838 640 C856 668 864 686 868 700" fill="none" stroke="#060910" stroke-width="15" stroke-linecap="round"/>
+  <path d="M868 692 L912 782" stroke="#0b1018" stroke-width="9" stroke-linecap="round"/>
+  <!-- rim light espectral no contorno esquerdo -->
+  <path d="M779 570 Q773 590 772 612 Q768 700 770 862" fill="none" stroke="#9fc4ff" stroke-width="2.6" opacity=".55"/>
+  <path d="M800 546 Q793 574 794 606" fill="none" stroke="#9fc4ff" stroke-width="2" opacity=".45"/>
+
+  <!-- névoa rasteira volumétrica -->
+  <ellipse cx="800" cy="872" rx="600" ry="52" fill="url(#mist)" opacity=".8"/>
+  <ellipse cx="360" cy="890" rx="380" ry="40" fill="url(#mist)" opacity=".55"/>
+  <ellipse cx="1240" cy="894" rx="400" ry="38" fill="url(#mist)" opacity=".55"/>
+
+  <!-- brasas espectrais -->
+  <g fill="#cfe0ff">
+    <circle cx="700" cy="600" r="2.6" opacity=".8"/>
+    <circle cx="908" cy="560" r="2.2" opacity=".7"/>
+    <circle cx="640" cy="700" r="2" opacity=".55"/>
+    <circle cx="960" cy="660" r="2.4" opacity=".65"/>
+    <circle cx="540" cy="520" r="1.8" opacity=".5"/>
+    <circle cx="1060" cy="500" r="2" opacity=".55"/>
+    <circle cx="802" cy="470" r="2.2" opacity=".6"/>
+    <circle cx="1010" cy="740" r="1.8" opacity=".45"/>
+  </g>
+
+  <!-- vinheta integradora -->
+  <rect width="1600" height="900" fill="url(#vin)"/>
+</svg>

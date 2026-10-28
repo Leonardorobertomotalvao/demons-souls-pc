@@ -23,7 +23,7 @@
       }
     });
     nav.addEventListener("click", function (e) {
-      if (e.target.closest("a") && window.matchMedia("(max-width: 1120px)").matches) closeMenu();
+      if (e.target.closest("a") && window.matchMedia("(max-width: 1260px)").matches) closeMenu();
     });
   }
 

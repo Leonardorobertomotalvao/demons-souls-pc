@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <!-- Arte conceitual original: o salão do Nexus — arcos em círculo com pedras-arco espectrais.
+       Desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <radialGradient id="heart" cx=".5" cy=".5" r=".6">
+      <stop offset="0" stop-color="#cfe0ff" stop-opacity=".32"/>
+      <stop offset=".55" stop-color="#9fb8e6" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2a46"/>
+      <stop offset="1" stop-color="#0b101d"/>
+    </linearGradient>
+    <linearGradient id="astone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe0ff"/>
+      <stop offset="1" stop-color="#5d7fc0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="#060a12"/>
+  <rect width="800" height="500" fill="url(#heart)"/>
+
+  <!-- arcos góticos do salão -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M100 460 L100 210 Q210 116 320 210 L320 460" stroke="#46587c" stroke-width="3"/>
+    <path d="M330 460 L330 246 Q430 166 530 246 L530 460" stroke="#3a4c74" stroke-width="2.4" opacity=".85"/>
+    <path d="M480 460 L480 224 Q600 128 720 224 L720 460" stroke="#46587c" stroke-width="3"/>
+  </g>
+
+  <!-- colunas -->
+  <g fill="url(#col)">
+    <rect x="90" y="206" width="18" height="254"/>
+    <rect x="312" y="206" width="18" height="254"/>
+    <rect x="472" y="220" width="18" height="240"/>
+    <rect x="712" y="220" width="18" height="240"/>
+  </g>
+
+  <!-- archstones sobre pedestais -->
+  <g>
+    <path d="M209 356 L239 410 L209 452 L179 410 Z" fill="url(#astone)" opacity=".95"/>
+    <ellipse cx="209" cy="410" rx="80" ry="66" fill="url(#heart)"/>
+    <rect x="185" y="452" width="48" height="14" fill="url(#col)"/>
+    <path d="M601 366 L629 416 L601 456 L573 416 Z" fill="url(#astone)" opacity=".85"/>
+    <ellipse cx="601" cy="416" rx="72" ry="60" fill="url(#heart)"/>
+    <rect x="579" y="456" width="44" height="12" fill="url(#col)"/>
+  </g>
+
+  <!-- luzes suspensas -->
+  <g>
+    <circle cx="420" cy="120" r="14" fill="#cfe0ff" opacity=".14"/>
+    <circle cx="420" cy="120" r="3.6" fill="#dce8ff" opacity=".95"/>
+    <line x1="420" y1="0" x2="420" y2="114" stroke="#2b3a5c" stroke-width="1"/>
+    <circle cx="120" cy="140" r="10" fill="#cfe0ff" opacity=".12"/>
+    <circle cx="120" cy="140" r="2.8" fill="#dce8ff" opacity=".85"/>
+    <line x1="120" y1="0" x2="120" y2="136" stroke="#2b3a5c" stroke-width="1"/>
+    <circle cx="700" cy="150" r="9" fill="#cfe0ff" opacity=".11"/>
+    <circle cx="700" cy="150" r="2.4" fill="#dce8ff" opacity=".8"/>
+    <line x1="700" y1="0" x2="700" y2="146" stroke="#2b3a5c" stroke-width="1"/>
+  </g>
+
+  <!-- chão em perspectiva + névoa -->
+  <g stroke="#2b3a5c" stroke-width="1" opacity=".5">
+    <line x1="0" y1="460" x2="800" y2="460"/>
+    <line x1="0" y1="486" x2="800" y2="486"/>
+    <line x1="120" y1="460" x2="60" y2="500"/>
+    <line x1="330" y1="460" x2="300" y2="500"/>
+    <line x1="520" y1="460" x2="510" y2="500"/>
+    <line x1="700" y1="460" x2="750" y2="500"/>
+  </g>
+  <ellipse cx="400" cy="476" rx="420" ry="36" fill="#9fb8e6" opacity=".08"/>
+
+  <!-- figura distante (silhueta) -->
+  <g fill="#04060c">
+    <path d="M376 452 L376 424 Q384 408 396 410 L400 416 L406 410 Q416 410 424 424 L424 452 Z"/>
+  </g>
+</svg>
