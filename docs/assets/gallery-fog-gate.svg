@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img">
+  <!-- Ilustração decorativa original: um portal de névoa entre pilares.
+       Arte desenhada para este site — não é captura do jogo. -->
+  <defs>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#111a2c"/>
+      <stop offset=".5" stop-color="#1b2842"/>
+      <stop offset="1" stop-color="#0e1524"/>
+    </linearGradient>
+    <linearGradient id="stoneL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22314f"/>
+      <stop offset="1" stop-color="#0d1322"/>
+    </linearGradient>
+    <radialGradient id="mist" cx=".5" cy=".62" r=".62">
+      <stop offset="0" stop-color="#cfe0ff" stop-opacity=".5"/>
+      <stop offset=".45" stop-color="#9fb8e6" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#9fb8e6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="#05080f"/>
+
+  <!-- pilares esquerdo e direito -->
+  <g>
+    <rect x="128" y="120" width="96" height="330" fill="url(#stone)"/>
+    <rect x="112" y="104" width="128" height="26" fill="url(#stoneL)"/>
+    <rect x="140" y="150" width="14" height="60" fill="#0a0f1b" opacity=".8"/>
+    <rect x="164" y="240" width="14" height="70" fill="#0a0f1b" opacity=".8"/>
+
+    <rect x="576" y="120" width="96" height="330" fill="url(#stone)"/>
+    <rect x="560" y="104" width="128" height="26" fill="url(#stoneL)"/>
+    <rect x="600" y="150" width="14" height="60" fill="#0a0f1b" opacity=".8"/>
+    <rect x="624" y="240" width="14" height="70" fill="#0a0f1b" opacity=".8"/>
+  </g>
+
+  <!-- arco quebrado entre os pilares -->
+  <path d="M224 128 Q400 44 576 128" fill="none" stroke="#54617c" stroke-width="3" opacity=".7"/>
+  <path d="M400 52 L400 44" stroke="#54617c" stroke-width="3" opacity=".5"/>
+
+  <!-- névoa entre os pilares -->
+  <ellipse cx="400" cy="360" rx="240" ry="190" fill="url(#mist)"/>
+  <ellipse cx="400" cy="330" rx="150" ry="120" fill="url(#mist)" opacity=".9"/>
+  <ellipse cx="400" cy="452" rx="380" ry="56" fill="url(#mist)"/>
+
+  <!-- partículas espectrais -->
+  <g fill="#dce8ff">
+    <circle cx="352" cy="300" r="2.4" opacity=".85"/>
+    <circle cx="452" cy="262" r="2" opacity=".7"/>
+    <circle cx="404" cy="220" r="2.8" opacity=".9"/>
+    <circle cx="330" cy="380" r="1.8" opacity=".55"/>
+    <circle cx="470" cy="392" r="1.8" opacity=".6"/>
+    <circle cx="400" cy="172" r="2" opacity=".75"/>
+  </g>
+
+  <!-- solo -->
+  <rect x="0" y="446" width="800" height="54" fill="#04060b"/>
+  <path d="M0 446 L800 446" stroke="#3a4763" stroke-width="1" opacity=".5"/>
+</svg>

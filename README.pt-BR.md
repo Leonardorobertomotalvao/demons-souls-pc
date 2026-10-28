@@ -194,6 +194,7 @@ Relatos de bug e pedidos de funcionalidade: use os templates de issue ([bug repo
 ## Links
 
 - **Site:** https://leonardorobertomotalvao.github.io/demons-souls-pc/
+- **Fonte do site:** [`docs/`](docs/) — site estático (HTML + CSS + JS mínimo, sem build), publicado pelo GitHub Pages a partir de `main` + `/docs`. Os metadados de SEO (meta tags, sitemap, JSON-LD, hreflang) ajudam na descoberta; a indexação e as posições dependem exclusivamente dos buscadores — não há garantia de indexação ou de posições.
 - **Repositório:** https://github.com/Leonardorobertomotalvao/demons-souls-pc
 - **Releases (pacotes do launcher):** https://github.com/Leonardorobertomotalvao/demons-souls-pc/releases
 - **Discussions:** https://github.com/Leonardorobertomotalvao/demons-souls-pc/discussions
