@@ -1,7 +1,7 @@
 English | [Português (BR)](README.pt-BR.md)
 
 # Demon's Souls PC — native static recompilation for Windows x64
-
+[![Listed on PlayPorted](https://playported.com/badge.svg)](https://playported.com/ports/1006-demons-souls/)
 **An unofficial, experimental native Windows port of *Demon's Souls* (PS3 North America, BLUS30443), built with static recompilation.** The game's PowerPC/SPU machine code is translated ahead-of-time to C, compiled to a native x64 executable, and linked against hand-written clean-room reimplementations of the PS3 system libraries — no general-purpose emulation at runtime. Rendering uses Direct3D 12, audio uses WASAPI, and a WPF/.NET 8 launcher handles managed installation, SHA-256 integrity verification, and startup.
 
 This project is for people who own a legal copy of the game and want to play it natively on a modern Windows PC. It is **not** an emulator and ships **no game content**: you supply the game files yourself, from your own copy.
